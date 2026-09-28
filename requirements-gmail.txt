@@ -1,0 +1,10 @@
+# OPTIONAL extra dependencies for the Gmail connector (gmail_connector.py).
+# Not installed by default - the base app works fully without these.
+# Install only if you want to try the (UNTESTED - see gmail_connector.py)
+# LinkedIn/Indeed email-alert connector:
+#
+#   pip install -r requirements-gmail.txt
+#
+google-api-python-client>=2.100
+google-auth-httplib2>=0.2
+google-auth-oauthlib>=1.2

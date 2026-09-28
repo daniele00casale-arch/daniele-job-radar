@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daniele Job Radar — Fallback HTML (mobile)</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111827; --card:#1e293b; --border:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#22c55e; --accent2:#38bdf8;
+    --warn:#fbbf24;
+    --diamond:#c7d2fe; --gold:#fde68a; --silver:#e2e8f0; --intern:#bbf7d0; --parttime:#fbcfe8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+  header{padding:20px 16px 6px;}
+  h1{margin:0 0 6px;font-size:1.35rem;}
+  .sub{color:var(--muted);font-size:.85rem;}
+  .wrap{padding:0 16px 60px;max-width:820px;margin:0 auto;}
+  details.controls{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin:14px 0;}
+  summary{cursor:pointer;font-weight:600;}
+  .field{display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:var(--muted);margin:10px 0;}
+  input,select,button{background:#0b1220;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 10px;font-size:.9rem;width:100%;}
+  button{cursor:pointer;min-height:2.6rem;font-weight:600;}
+  button.primary{background:var(--accent2);color:#001018;border:none;}
+  select#sectionSelect{margin:10px 0;font-size:1rem;padding:12px;}
+  .hardfilters{font-size:.78rem;color:var(--muted);margin-top:8px;}
+  .metrics{display:flex;gap:10px;margin:14px 0;flex-wrap:wrap;}
+  .metric{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 14px;flex:1;min-width:90px;text-align:center;}
+  .metric b{display:block;font-size:1.3rem;}
+  .metric span{color:var(--muted);font-size:.72rem;text-transform:uppercase;}
+  .warnbox{background:#3f2d12;border:1px solid var(--warn);border-radius:10px;padding:10px 14px;margin:8px 0;font-size:.82rem;color:#fde68a;}
+  .job{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin:12px 0;overflow-wrap:break-word;}
+  .job h3{margin:6px 0 4px;font-size:1rem;}
+  .jobmeta{color:var(--muted);font-size:.8rem;margin-bottom:4px;}
+  .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.72rem;font-weight:700;margin:2px 4px 2px 0;}
+  .b-diamond{background:var(--diamond);color:#1e1b4b;} .b-gold{background:var(--gold);color:#78350f;}
+  .b-silver{background:var(--silver);color:#334155;} .b-intern{background:var(--intern);color:#064e3b;}
+  .b-parttime{background:var(--parttime);color:#831843;} .b-score{background:#0b1220;color:#e2e8f0;border:1px solid var(--border);}
+  .row{font-size:.85rem;margin:3px 0;}
+  .reasons{font-size:.78rem;color:#a7f3d0;margin:6px 0;}
+  .penalty{font-size:.78rem;color:#fbbf24;margin:4px 0;}
+  .linkbtn{display:block;margin-top:8px;color:#0b1220;background:var(--accent2);padding:8px 14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:.85rem;text-align:center;}
+  details.desc{margin-top:8px;font-size:.82rem;color:var(--muted);}
+  pre.summary{white-space:pre-wrap;background:#0b1220;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:.75rem;}
+  .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .actions select, .actions button{flex:1;min-width:110px;}
+  .empty{color:var(--muted);padding:18px;text-align:center;border:1px dashed var(--border);border-radius:10px;}
+  a{color:var(--accent2);}
+  .footer-note{color:var(--muted);font-size:.74rem;margin-top:26px;border-top:1px solid var(--border);padding-top:12px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎯 Daniele Job Radar — HTML autonomo</h1>
+  <p class="sub">
+    Diamond · Gold · Silver · Strategic Internships · High-Value Part-Time. Gira interamente nel browser (nessuna
+    installazione), stato salvato in locale sul tuo telefono. <b>Limite onesto:</b> alcune API pubbliche bloccano
+    le chiamate dirette dal browser (CORS lato server, fuori dal nostro controllo) — quando succede questa pagina
+    lo segnala chiaramente. Per la copertura più completa usa la dashboard Streamlit (<code>start_job_radar.bat</code>
+    o la versione online — vedi DEPLOY_STREAMLIT_CLOUD.md).
+  </p>
+</header>
+<div class="wrap">
+  <details class="controls">
+    <summary>🔎 Filtri e fonti</summary>
+    <div class="field">
+      <label>Compatibilità minima per essere mostrata: <b id="thVal">50</b>%</label>
+      <input type="range" id="threshold" min="0" max="100" step="5" value="50" oninput="document.getElementById('thVal').textContent=this.value">
+    </div>
+    <div class="field">
+      <label>Parole chiave di ricerca (separate da virgola)</label>
+      <input type="text" id="queries" value="product manager, business analyst, ai builder, marketing operations, digital transformation">
+    </div>
+    <button class="primary" id="runBtn" onclick="runSearch()">🔄 Cerca posizioni</button>
+    <p class="hardfilters"><b>Filtri obbligatori (sempre attivi):</b> solo retribuito · no stage generico/volontariato/equity/commissione ·
+    seniority entry/junior/graduate/associate · nessuna informazione mancante viene inventata.</p>
+  </details>
+
+  <div id="warnings"></div>
+  <div class="metrics" id="metrics"></div>
+  <button onclick="exportCsv()" style="margin:8px 0;">⬇️ Esporta CSV</button>
+
+  <select id="sectionSelect" onchange="renderSection()"></select>
+  <div id="results"><div class="empty">Premi "Cerca posizioni" per iniziare.</div></div>
+
+  <div class="footer-note">
+    Fonti: Himalayas, Arbeitnow, Remotive (attribuzione richiesta), We Work Remotely (RSS ufficiali). Scoring euristico:
+    i requisiti obbligatori non vengono mai superati da un punteggio alto. Questa pagina non trasmette i tuoi dati a
+    nessun server proprio: le chiamate partono dal tuo browser verso le fonti indicate, e lo stato (salvato/candidato/
+    ecc.) resta solo in questo browser (localStorage), non è sincronizzato con la versione Streamlit.
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Candidate profile & tier config (mirrors config.yaml / scoring.py)
+// ============================================================
+const PROFILE = {
+  targetTitles: ["junior product manager","associate product manager","junior product owner","product operations",
+    "product marketing","ai product builder","ai builder","digital transformation analyst","business analyst",
+    "business development analyst","innovation analyst","marketing operations","customer insights","crm",
+    "retail technology","digital commerce","process improvement","ai business evaluator","ai trainer",
+    "product management ai expert"],
+  strengths: ["product management","kpi monitoring","market volume reporting","competitive benchmarking",
+    "interactive dashboard","data visualisation","ai enabled process automation","requirements gathering",
+    "stakeholder collaboration","fashion retail","crm","customer insights","team coordination","sales kpi",
+    "conversion rate","audit","consulting","business design","financial forecasting","digital product development",
+    "mvp development","firebase"],
+  sectors: ["digital products","artificial intelligence","saas","fintech","digital public services","automotive",
+    "fashion","retail","outdoor and action sports","consulting","travel technology","innovation and venture building"],
+};
+const WEIGHTS = {role:20, skills:20, seniority:15, location:15, contract:10, sector:8, growth:5, language:4, brand:3};
+const BANDS = {apply_now:90, strong_opportunity:82, consider:75, stretch:65};
+
+const DIAMOND = {
+  roleKeywords: ["product management","product operations","product marketing","digital product","ai product","ai builder","digital transformation"],
+  worldwideEvidence: ["worldwide remote","remote worldwide","work from anywhere","applicants from all countries","globally distributed","no location restriction","no location restrictions","international contractor","employer of record","eor available"],
+  worldwideExclusions: ["us only","u.s. only","united states only","uk only","united kingdom only","canada only","eu only","european union only","emea only","must be based in","must reside in","remote within","timezone overlap required","work permit for","must have the right to work in"],
+  minAnnualEur: 40000, maxExp: 1, maxExpPreferred: 2,
+};
+const GOLD = {
+  roleKeywords: ["product management","product marketing","ai builder","digital product","business analysis","business development","marketing operations","customer insights","retail technology","digital commerce","innovation","process improvement","category analysis","commercial analysis"],
+  preferredLocations: ["chiasso","stabio","mendrisio","rancate","lugano","manno","bioggio","agno","bellinzona","ticino","milano","milan"],
+  maxExp: 1, maxExpPreferred: 2,
+};
+const SILVER = {
+  roleKeywords: ["product management","product operations","product marketing","ai builder","digital transformation","business analysis","customer insights","retail technology","marketing operations"],
+  minAnnualEur: 40000, maxExp: 1, minCompatibilityIfSalaryMissing: 90,
+};
+const WATCHLIST = ["PagoPA","Product People","Revolut","Satispay","Google","Remote","Canonical","GitLab","Automattic",
+  "Camunda","Storyblok","Launchmetrics","Sysdig","360dialog","Bending Spoons","ShippyPro","Jet HR","lastminute.com",
+  "VF Corporation","BMW Group","Medacta","Deloitte","Kering","Drommer"];
+
+const BAD_PAYMENT_TERMS = ["unpaid","volunteer","equity only","equity-only","100% equity","commission only","commission-only","bounty only","token only","no salary"];
+const INTERNSHIP_TERMS = ["intern","internship","stage","tirocinio","apprenticeship","co-op"];
+const ENTRY_TERMS = ["entry level","entry-level","junior","graduate","recent graduate","associate","no experience"];
+const PREFERRED_QUALIFIERS = ["preferred","desirable","nice to have","a plus","bonus if","ideally"];
+const GROWTH_HINTS = ["mentorship","training programme","training program","career development","learning budget","structured onboarding","fast growing","scale up","rotational programme","graduate programme"];
+const BRAND_HINTS = ["y combinator","unicorn","fortune 500","listed company","publicly traded","series b","series c","series d"];
+
+function norm(s){ return (s||"").toLowerCase().replace(/[^a-z0-9+%]+/g," ").trim(); }
+function rawText(job){ return (job.title+" "+job.description+" "+job.location+" "+job.employment_type+" "+(job.salary||"")).toLowerCase().replace(/\s+/g," ").trim(); }
+function normText(job){ return norm(job.title+" "+job.description+" "+job.location+" "+job.employment_type+" "+(job.salary||"")); }
+function stripHtml(html){ const d=document.createElement("div"); d.innerHTML=html||""; return (d.textContent||d.innerText||"").replace(/\s+/g," ").trim(); }
+function roleMatch(text, keywords){ return keywords.filter(k=>norm(k) && text.includes(norm(k))); }
+
+function parseExperience(raw){
+  if (/no experience|recent graduate|new graduate|fresh graduate|0\s*[-–]\s*1\s*years?/.test(raw)) return {exp:0, preferred:false};
+  const patterns = [/(\d+)\s*\+?\s*years?/g, /minimum\s+(\d+)\s+years?/g, /at least\s+(\d+)\s+years?/g];
+  let vals = [];
+  for (const p of patterns){
+    let m; while((m=p.exec(raw))!==null){
+      const start = Math.max(0, m.index-40), end = Math.min(raw.length, m.index+m[0].length+20);
+      const window = raw.slice(start,end);
+      const preferred = PREFERRED_QUALIFIERS.some(q=>window.includes(q));
+      vals.push({v:parseInt(m[1],10), preferred});
+    }
+  }
+  if (!vals.length) return {exp:null, preferred:false};
+  vals.sort((a,b)=>a.v-b.v);
+  return {exp:vals[0].v, preferred:vals[0].preferred};
+}
+
+function cleanNumber(s){
+  s = s.replace(/,/g,"");
+  if (/\.\d{1,2}$/.test(s)) return parseFloat(s);
+  return parseFloat(s.replace(/\./g,""));
+}
+
+function parseCompensation(raw){
+  const CUR_MAP = {"$":"USD","€":"EUR","£":"GBP","fr":"CHF","fr.":"CHF"};
+  let m = raw.match(/(usd|eur|chf|gbp|\$|€|£|fr\.?)\s?(\d[\d,\.]{2,})\s?(?:[-–to]{1,3}\s?(usd|eur|chf|gbp|\$|€|£|fr\.?)?\s?(\d[\d,\.]{2,}))?\s?(?:\/|per)?\s?(year|yr|annum|month|hour|hr)?/i);
+  if (!m){
+    m = raw.match(/(\d[\d,\.]{2,})\s?(?:[-–]\s?(\d[\d,\.]{2,}))?\s?(usd|eur|chf|gbp)\b(?:\s?(?:\/|per)?\s?(year|yr|annum|month|hour|hr))?/i);
+    if (m){ m = {min:m[1], max:m[2], cur:m[3], period:m[4]}; }
+  } else {
+    m = {cur:m[1], min:m[2], cur2:m[3], max:m[4], period:m[5]};
+  }
+  if (!m || !m.min){
+    const hm = raw.match(/(usd|eur|chf|gbp|\$|€|£)\s?(\d[\d,\.]{0,6})\s?(?:\/|per)\s?(?:hour|hr)/i);
+    if (hm){
+      const cur = CUR_MAP[hm[1].toLowerCase()] || hm[1].toUpperCase();
+      const guaranteed = /(\d{1,3})\s*(?:\+)?\s*hours?\s*(?:per|\/|a)\s*week|(\d{1,3})\s*%\s*(?:workload|fte|time)/i.test(raw);
+      return {found:true, min:null, max:null, currency:cur, period:"hour", guaranteed,
+        display: `${hm[2]} ${cur}/ora` + (guaranteed?"":" (ore non garantite - non annualizzato)")};
+    }
+    return {found:false, min:null, max:null, currency:null, period:null, guaranteed:false, display:"Salary not disclosed"};
+  }
+  const curRaw = (m.cur || m.cur2 || "EUR");
+  const currency = CUR_MAP[curRaw.toLowerCase()] || curRaw.toUpperCase();
+  const minV = cleanNumber(m.min);
+  const maxV = m.max ? cleanNumber(m.max) : minV;
+  const period = (m.period || "year").toLowerCase();
+  const guaranteed = ["year","yr","annum","month"].includes(period) || /(\d{1,3})\s*(?:\+)?\s*hours?\s*(?:per|\/|a)\s*week|(\d{1,3})\s*%\s*(?:workload|fte|time)/i.test(raw);
+  let display = Math.round(minV).toLocaleString("it-IT");
+  if (maxV && maxV !== minV) display += " - " + Math.round(maxV).toLocaleString("it-IT");
+  display += " " + currency;
+  if (["hour","hr"].includes(period)) display += "/ora" + (guaranteed?"":" (ore non garantite - non annualizzato)");
+  return {found:true, min:minV, max:maxV, currency, period, guaranteed, display};
+}
+function meetsAnnualMinimum(comp, minEur){
+  if (!comp.found || comp.min===null) return null;
+  if (!["year","yr","annum"].includes(comp.period)) return null;
+  return comp.min >= minEur;
+}
+function diamondWorldwide(text){
+  if (DIAMOND.worldwideExclusions.some(x=>text.includes(x))) return false;
+  return DIAMOND.worldwideEvidence.some(x=>text.includes(x));
+}
+function goldLocationOk(text){ return GOLD.preferredLocations.some(l=>text.includes(l)); }
+function silverRemoteScope(text){
+  if (text.includes("italy") || text.includes("italia")) return "italy_or_europe";
+  if ((text.includes("europe")||text.includes("emea")) && !text.includes("not italy") && !text.includes("excluding italy") && !text.includes("except italy")) return "italy_or_europe";
+  return null;
+}
+function scoreBand(score){
+  if (score>=BANDS.apply_now) return "Apply Now";
+  if (score>=BANDS.strong_opportunity) return "Strong Opportunity";
+  if (score>=BANDS.consider) return "Consider";
+  if (score>=BANDS.stretch) return "Stretch";
+  return "Hidden";
+}
+function experienceOkForTier(exp, preferred, maxY, maxYPref){
+  if (exp===null) return true;
+  if (exp<=maxY) return true;
+  if (preferred && exp<=maxYPref) return true;
+  return false;
+}
+function expText(exp, preferred){
+  if (exp===null) return "Experience requirement not clearly stated";
+  return preferred ? `~${exp} anni (indicati come preferenziali, non obbligatori)` : `~${exp} anni richiesti`;
+}
+
+function compatibilityScore(text, raw, title){
+  let reasons = [];
+  const titleHits = roleMatch(title+" "+text.slice(0,800), PROFILE.targetTitles);
+  const roleScore = Math.min(WEIGHTS.role, titleHits.length*6 + (titleHits.length?6:0));
+  if (titleHits.length) reasons.push(`ruolo allineato (${titleHits.slice(0,2).join(", ")})`);
+
+  const skillHits = roleMatch(text, PROFILE.strengths);
+  const skillsScore = Math.min(WEIGHTS.skills, Math.round(skillHits.length/Math.max(1,PROFILE.strengths.length)*WEIGHTS.skills*2.2));
+  if (skillHits.length) reasons.push(`${skillHits.length} competenze rilevanti (${skillHits.slice(0,4).join(", ")})`);
+
+  const {exp, preferred} = parseExperience(raw);
+  const entryHits = ENTRY_TERMS.filter(t=>text.includes(t));
+  let seniorityScore;
+  if (exp!==null && exp<=1){ seniorityScore = WEIGHTS.seniority; reasons.push(`esperienza compatibile (~${exp} anni)`); }
+  else if (exp===null && entryHits.length){ seniorityScore = WEIGHTS.seniority; reasons.push("descritta come entry-level/junior"); }
+  else if (exp!==null && exp<=2 && preferred){ seniorityScore = Math.round(WEIGHTS.seniority*0.8); reasons.push("esperienza extra indicata come preferenziale"); }
+  else { seniorityScore = exp===null ? Math.round(WEIGHTS.seniority*0.3) : 0; }
+
+  const worldwide = diamondWorldwide(text);
+  const locationScore = worldwide ? WEIGHTS.location : Math.round(WEIGHTS.location*0.4);
+  if (worldwide) reasons.push("remote worldwide con evidenza esplicita");
+
+  const comp = parseCompensation(raw);
+  const contractScore = comp.found ? WEIGHTS.contract : Math.round(WEIGHTS.contract*0.4);
+
+  const sectorHits = roleMatch(text, PROFILE.sectors);
+  const sectorScore = Math.min(WEIGHTS.sector, sectorHits.length*2);
+  if (sectorHits.length) reasons.push(`settore affine (${sectorHits.slice(0,2).join(", ")})`);
+
+  const growthHits = GROWTH_HINTS.filter(h=>text.includes(h));
+  const growthScore = Math.min(WEIGHTS.growth, growthHits.length*2);
+
+  const frenchReq = /(fluent|native|professional|advanced|working)\s+french|french\s+(fluency|required|native|speaker)/.test(text);
+  const germanReq = /(fluent|native|professional|advanced|working)\s+german|german\s+(fluency|required|native|speaker)/.test(text);
+  const covered = ["italian","english","spanish"].filter(l=>text.includes(l));
+  let languageScore;
+  if (frenchReq || germanReq){ languageScore = 0; reasons.push(`gap linguistico: ${frenchReq?"francese":"tedesco"} richiesto a livello professionale`); }
+  else if (covered.length){ languageScore = WEIGHTS.language; reasons.push(`lingue coperte (${covered.join(", ")})`); }
+  else { languageScore = Math.round(WEIGHTS.language*0.6); }
+
+  const brandHits = BRAND_HINTS.filter(h=>text.includes(h));
+  const brandScore = Math.min(WEIGHTS.brand, brandHits.length*3);
+
+  const total = Math.min(100, roleScore+skillsScore+seniorityScore+locationScore+contractScore+sectorScore+growthScore+languageScore+brandScore);
+  return {total, reasons, exp, preferred, comp, worldwide};
+}
+
+function assess(job){
+  const text = normText(job), raw = rawText(job), title = norm(job.title);
+  const company = job.company || "";
+  const isWatchlisted = WATCHLIST.some(w=>company.toLowerCase().includes(w.toLowerCase()));
+
+  const badPay = BAD_PAYMENT_TERMS.find(x=>text.includes(x));
+  if (badPay) return {priority:null, filtered_out_reason:`esclusa: compenso non ammesso (${badPay})`, title:job.title, company, is_watchlisted:isWatchlisted};
+
+  const words = new Set(text.split(" "));
+  const internship = INTERNSHIP_TERMS.some(x=>words.has(x)||text.includes(x));
+
+  const {total:score, reasons, exp, preferred, comp, worldwide} = compatibilityScore(text, raw, title);
+  const band = scoreBand(score);
+  const compOkDiamond = meetsAnnualMinimum(comp, DIAMOND.minAnnualEur);
+  const remoteScope = worldwide ? "Genuinely worldwide" : "Remote arrangement requires confirmation" + (isWatchlisted?" (watchlist company - verify per-vacancy)":"");
+  const countryRestrictions = worldwide ? "Nessuna evidenza di restrizione geografica" : "Non determinabile dal testo - verificare l'annuncio originale";
+
+  let priority=null, mandatoryFound=[], preferredFound=[], penalties=[];
+
+  if (internship){
+    let met = [];
+    if (isWatchlisted || BRAND_HINTS.some(h=>text.includes(h))) met.push("internationally recognised company");
+    if (roleMatch(text, DIAMOND.roleKeywords.concat(GOLD.roleKeywords)).length) met.push("relevance to product/ai/digital/retail tech");
+    if (["structured programme","structured program","rotational","graduate programme"].some(h=>text.includes(h))) met.push("structured programme");
+    if (comp.found) met.push("clear compensation");
+    if (text.length>400) met.push("clear responsibilities");
+    if (GROWTH_HINTS.some(h=>text.includes(h))) met.push("strong employability");
+    if (goldLocationOk(text) || worldwide) met.push("ticino or flexible remote");
+    if (score>=70) met.push("stronger learning value");
+    if (met.length>=5){ priority="STRATEGIC_INTERNSHIP"; mandatoryFound=met; }
+    else return {priority:null, filtered_out_reason:`esclusa: stage che non soddisfa i criteri di Strategic Internship (${met.length}/8)`, title:job.title, company, is_watchlisted:isWatchlisted};
+  }
+
+  const hvptHint = raw.match(/(\d{1,2})\s*(?:[-–]\s*(\d{1,2}))?\s*hours?\s*(?:per|\/|a)\s*week|(\d{1,3})\s*%\s*(?:workload|fte)/i);
+  if (!priority && hvptHint && roleMatch(text, ["product","ai","business","crm","analytics","digital commerce","process improvement"]).length){
+    const rateM = raw.match(/(usd|eur|chf|gbp|\$|€|£)\s?(\d[\d,\.]{0,6})\s?(?:\/|per)\s?(?:hour|hr)/i);
+    if (!hvptHint) penalties.push("nessun numero di ore garantito -> Supplementary income only");
+    else if (rateM){
+      const rate = parseFloat(rateM[2].replace(/,/g,""));
+      if (rate>=25){ priority="HIGH_VALUE_PART_TIME"; mandatoryFound=["hours/workload stated", `hourly rate ${rate} >= 25`]; }
+      else penalties.push(`tariffa oraria ${rate} sotto la soglia minima di 25`);
+    } else { priority="HIGH_VALUE_PART_TIME"; mandatoryFound=["hours/workload explicitly stated"]; }
+  }
+
+  if (!priority && !internship){
+    const roleHits = roleMatch(text, DIAMOND.roleKeywords.concat(PROFILE.targetTitles));
+    const expOk = experienceOkForTier(exp, preferred, DIAMOND.maxExp, DIAMOND.maxExpPreferred);
+    if (roleHits.length && worldwide && expOk && compOkDiamond===true){
+      priority="DIAMOND";
+      mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "genuinely worldwide (explicit evidence)", `seniority: ${expText(exp,preferred)}`, `compensation: ${comp.display} (>= EUR 40,000)`];
+    } else if (roleHits.length && expOk){
+      if (!worldwide) penalties.push("non Diamond: remote worldwide non confermato esplicitamente");
+      if (compOkDiamond===null) penalties.push("non Diamond: compenso non dichiarato");
+      else if (compOkDiamond===false) penalties.push(`non Diamond: compenso sotto EUR 40.000 (${comp.display})`);
+    }
+  }
+
+  if (!priority && !internship){
+    const roleHits = roleMatch(text, GOLD.roleKeywords.concat(PROFILE.targetTitles));
+    const locationOk = goldLocationOk(text);
+    const expOk = experienceOkForTier(exp, preferred, GOLD.maxExp, GOLD.maxExpPreferred);
+    if (roleHits.length && locationOk && expOk){
+      priority="GOLD";
+      mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "location: Ticino/Milano area", `seniority: ${expText(exp,preferred)}`];
+      if (!comp.found) penalties.push("Salary not disclosed - riduce la confidenza ma non esclude da Gold");
+    } else if (roleHits.length && expOk && !locationOk){
+      penalties.push("non Gold: location fuori dall'area Ticino/Milano");
+    }
+  }
+
+  if (!priority && !internship){
+    const roleHits = roleMatch(text, SILVER.roleKeywords.concat(PROFILE.targetTitles));
+    const remoteScopeS = silverRemoteScope(text);
+    const expOk = experienceOkForTier(exp, false, SILVER.maxExp, SILVER.maxExp);
+    if (roleHits.length && remoteScopeS==="italy_or_europe" && expOk){
+      const compOkSilver = meetsAnnualMinimum(comp, SILVER.minAnnualEur);
+      if (comp.found){
+        if (compOkSilver){ priority="SILVER"; mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "remote scope: Italy/Europe", `seniority: ${expText(exp,preferred)}`, `compensation: ${comp.display}`]; }
+        else penalties.push(`non Silver: compenso sotto EUR 40.000 (${comp.display})`);
+      } else if (score >= SILVER.minCompatibilityIfSalaryMissing){
+        priority="SILVER"; mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "remote scope: Italy/Europe", `seniority: ${expText(exp,preferred)}`, "compensation unverified but compatibility >= 90%"];
+        penalties.push("Salary not disclosed - mantenuta solo per compatibilità >= 90%");
+      } else penalties.push(`non Silver: Salary not disclosed e compatibilità ${score}% < 90%`);
+    }
+  }
+
+  if (!priority){
+    return {priority:null, filtered_out_reason: internship ? "stage non qualificato come Strategic Internship" : "nessun livello di priorità soddisfa tutte le condizioni obbligatorie",
+            title:job.title, company, score, penalties, is_watchlisted:isWatchlisted};
+  }
+
+  return {title:job.title, company, source:job.source, url:job.url, published_at:job.published_at,
+          priority, score, band, confidence: (exp!==null?1:0)+(worldwide||text.includes("must be based in")?1:0)+(comp.found?1:0) >= 3 ? "High" : ((exp!==null?1:0)+(comp.found?1:0)>=1?"Medium":"Low"),
+          reasons, penalties, mandatory_found: mandatoryFound, preferred_found: preferredFound,
+          experience_required: expText(exp,preferred), remote_scope: remoteScope, country_restrictions: countryRestrictions,
+          compensation: comp.display, compensation_guaranteed: comp.guaranteed, contract_type: job.employment_type || "n/d",
+          is_watchlisted: isWatchlisted, filtered_out_reason: null};
+}
+
+// ============================================================
+// Connectors (client-side fetch, same sources as the Streamlit app)
+// ============================================================
+async function fetchHimalayas(query){
+  const r = await fetch(`https://himalayas.app/jobs/api/search?q=${encodeURIComponent(query)}&limit=20&offset=0`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const payload = await r.json();
+  return (payload.jobs||[]).map(j=>{
+    const restrictions = j.locationRestrictions || [];
+    const location = restrictions.length ? restrictions.join(", ") : "Worldwide";
+    const description = stripHtml(j.description || j.excerpt || "");
+    const salary = [j.minSalary,j.maxSalary].filter(Boolean).join("-") + (j.currency?` ${j.currency}`:"");
+    return {source:"Himalayas", title:j.title||"", company:j.companyName||"", location,
+      description, employment_type:j.employmentType||"", seniority:Array.isArray(j.seniority)?j.seniority.join(", "):(j.seniority||""),
+      salary, url:j.applicationLink||j.url||"", published_at:""};
+  });
+}
+async function fetchArbeitnow(){
+  const r = await fetch("https://www.arbeitnow.com/api/job-board-api");
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const payload = await r.json();
+  return (payload.data||[]).map(j=>{
+    const description = stripHtml(j.description||"");
+    const jobTypes = j.job_types||[];
+    const location = j.location || (j.remote?"Remote":"");
+    return {source:"Arbeitnow", title:j.title||"", company:j.company_name||"", location, description,
+      employment_type: jobTypes.filter(t=>!/^(junior|mid|senior|lead|entry)$/i.test(t)).join(", "),
+      seniority: jobTypes.filter(t=>/junior|mid|senior|lead|entry/i.test(t)).join(", "),
+      salary:"", url:j.url||"", published_at:""};
+  });
+}
+async function fetchRemotive(query){
+  const r = await fetch(`https://remotive.com/api/remote-jobs?search=${encodeURIComponent(query)}&limit=100`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const payload = await r.json();
+  return (payload.jobs||[]).map(j=>({source:"Remotive", title:j.title||"", company:j.company_name||"",
+    location:j.candidate_required_location||"", description:stripHtml(j.description||""),
+    employment_type:(j.job_type||"").replace(/_/g," "), seniority:"", salary:j.salary||"", url:j.url||"", published_at:""}));
+}
+async function fetchWWR(){
+  const feeds = ["https://weworkremotely.com/categories/remote-product-jobs.rss",
+    "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+    "https://weworkremotely.com/categories/remote-sales-and-marketing-jobs.rss",
+    "https://weworkremotely.com/categories/remote-management-and-finance-jobs.rss"];
+  let out = [];
+  for (const feedUrl of feeds){
+    const r = await fetch(feedUrl);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const xml = new DOMParser().parseFromString(await r.text(), "text/xml");
+    for (const it of Array.from(xml.querySelectorAll("item"))){
+      let title = it.querySelector("title")?.textContent || "", company = "";
+      if (title.includes(":")){ [company,title] = title.split(":").map(s=>s.trim()); }
+      const region = it.querySelector("region")?.textContent || "";
+      out.push({source:"We Work Remotely", title, company, location: region || "Remote",
+        description: stripHtml(it.querySelector("description")?.textContent||""), employment_type:"Full-Time", seniority:"",
+        salary:"", url: it.querySelector("link")?.textContent||"", published_at:""});
+    }
+  }
+  return out;
+}
+
+// ============================================================
+// localStorage state (save/applied/interviewing/rejected/archived)
+// ============================================================
+function jobKey(j){ return `${(j.company||"").toLowerCase().trim()}|${(j.title||"").toLowerCase().trim()}|${(j.url||"").split("?")[0]}`; }
+function loadState(){
+  try { return JSON.parse(localStorage.getItem("job_radar_state")||"{}"); }
+  catch(e){ return {}; }
+}
+function saveState(state){
+  try { localStorage.setItem("job_radar_state", JSON.stringify(state)); }
+  catch(e){ /* private mode / storage disabled - degrade silently, state just won't persist */ }
+}
+let STATE = loadState();
+let LAST_ASSESSED = [];
+
+function setStatus(key, status){ STATE[key] = STATE[key] || {}; STATE[key].status = status; saveState(STATE); renderSection(); }
+
+// ============================================================
+// Orchestration + rendering
+// ============================================================
+async function runSearch(){
+  const btn = document.getElementById("runBtn");
+  btn.disabled = true; btn.textContent = "Ricerca in corso...";
+  document.getElementById("warnings").innerHTML = "";
+  const queries = document.getElementById("queries").value.split(",").map(s=>s.trim()).filter(Boolean);
+  let jobs = [], warnings = [];
+  for (const q of queries){
+    try { jobs = jobs.concat(await fetchHimalayas(q)); } catch(e){ warnings.push(`Himalayas ("${q}"): ${e.message} — possibile blocco CORS.`); }
+    try { jobs = jobs.concat(await fetchRemotive(q)); } catch(e){ warnings.push(`Remotive ("${q}"): ${e.message} — possibile blocco CORS.`); }
+  }
+  try { jobs = jobs.concat(await fetchArbeitnow()); } catch(e){ warnings.push(`Arbeitnow: ${e.message} — possibile blocco CORS.`); }
+  try { jobs = jobs.concat(await fetchWWR()); } catch(e){ warnings.push(`We Work Remotely: ${e.message} — possibile blocco CORS. Usa la dashboard Streamlit per questa fonte.`); }
+
+  const unique = new Map();
+  for (const j of jobs) unique.set(jobKey(j), j);
+
+  const threshold = parseInt(document.getElementById("threshold").value,10);
+  let assessed=[], filtered=[];
+  for (const j of unique.values()){
+    const r = assess(j);
+    if (!r.priority){ filtered.push(r); continue; }
+    if (r.score < threshold && !["STRATEGIC_INTERNSHIP","HIGH_VALUE_PART_TIME"].includes(r.priority)){
+      r.filtered_out_reason = `punteggio ${r.score}% sotto la soglia (${threshold}%)`;
+      filtered.push(r); continue;
+    }
+    const key = jobKey(j);
+    r.job_id = key; r.source_url = j.url;
+    r.status = (STATE[key] && STATE[key].status) || "new";
+    assessed.push(r);
+  }
+  LAST_ASSESSED = assessed;
+  window.__filtered = filtered;
+  window.__jobsTotal = jobs.length;
+
+  document.getElementById("metrics").innerHTML = `
+    <div class="metric"><b>${jobs.length}</b><span>Raccolte</span></div>
+    <div class="metric"><b>${assessed.length}</b><span>Valutate</span></div>
+    <div class="metric"><b>${filtered.length}</b><span>Escluse</span></div>`;
+  if (warnings.length) document.getElementById("warnings").innerHTML = warnings.map(w=>`<div class="warnbox">⚠️ ${escapeHtml(w)}</div>`).join("");
+
+  buildSectionSelect();
+  renderSection();
+  btn.disabled = false; btn.textContent = "🔄 Cerca posizioni";
+}
+
+function countIn(pred){ return LAST_ASSESSED.filter(pred).length; }
+function buildSectionSelect(){
+  const sel = document.getElementById("sectionSelect");
+  const opts = [
+    ["new_today", `🆕 New Today (${LAST_ASSESSED.length})`],
+    ["DIAMOND", `💎 Diamond (${countIn(r=>r.priority==="DIAMOND" && ["new","saved"].includes(r.status))})`],
+    ["GOLD", `🥇 Gold (${countIn(r=>r.priority==="GOLD" && ["new","saved"].includes(r.status))})`],
+    ["SILVER", `🥈 Silver (${countIn(r=>r.priority==="SILVER" && ["new","saved"].includes(r.status))})`],
+    ["STRATEGIC_INTERNSHIP", `🎓 Strategic Internships (${countIn(r=>r.priority==="STRATEGIC_INTERNSHIP")})`],
+    ["HIGH_VALUE_PART_TIME", `⏱️ High-Value Part-Time (${countIn(r=>r.priority==="HIGH_VALUE_PART_TIME")})`],
+    ["watchlist", `🏷️ Watchlist Companies (${countIn(r=>r.is_watchlisted && ["new","saved"].includes(r.status))})`],
+    ["salary_missing", `💰 Salary Not Disclosed (${countIn(r=>r.compensation==="Salary not disclosed" && ["new","saved"].includes(r.status))})`],
+    ["remote_verify", `📍 Remote Arrangement to Verify (${countIn(r=>(r.remote_scope||"").includes("requires confirmation") && ["new","saved"].includes(r.status))})`],
+    ["applied", `✅ Applied (${countIn(r=>r.status==="applied")})`],
+    ["interviewing", `🗣️ Interviewing (${countIn(r=>r.status==="interviewing")})`],
+    ["rejected", `❌ Rejected (${countIn(r=>r.status==="rejected")})`],
+    ["archived", `📦 Archived (${countIn(r=>r.status==="archived")})`],
+    ["filtered", `🚫 Filtered Out with Reasons (${(window.__filtered||[]).length})`],
+  ];
+  sel.innerHTML = opts.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
+}
+
+function renderSection(){
+  const sel = document.getElementById("sectionSelect");
+  if (!sel.options.length) return;
+  const val = sel.value || "new_today";
+  const el = document.getElementById("results");
+  let rows;
+  switch(val){
+    case "new_today": rows = LAST_ASSESSED; break;
+    case "DIAMOND": case "GOLD": case "SILVER":
+      rows = LAST_ASSESSED.filter(r=>r.priority===val && ["new","saved"].includes(r.status)); break;
+    case "STRATEGIC_INTERNSHIP": case "HIGH_VALUE_PART_TIME":
+      rows = LAST_ASSESSED.filter(r=>r.priority===val); break;
+    case "watchlist": rows = LAST_ASSESSED.filter(r=>r.is_watchlisted && ["new","saved"].includes(r.status)); break;
+    case "salary_missing": rows = LAST_ASSESSED.filter(r=>r.compensation==="Salary not disclosed" && ["new","saved"].includes(r.status)); break;
+    case "remote_verify": rows = LAST_ASSESSED.filter(r=>(r.remote_scope||"").includes("requires confirmation") && ["new","saved"].includes(r.status)); break;
+    case "applied": case "interviewing": case "rejected": case "archived":
+      rows = LAST_ASSESSED.filter(r=>r.status===val); break;
+    case "filtered":
+      const filtered = window.__filtered || [];
+      el.innerHTML = filtered.length ? filtered.map(r=>`<div class="job"><b>${escapeHtml(r.title||"(titolo non disponibile)")}</b> — ${escapeHtml(r.company||"")}<div class="row" style="color:var(--muted)">${escapeHtml(r.filtered_out_reason||"")}</div></div>`).join("") : `<div class="empty">Nessuna posizione esclusa.</div>`;
+      return;
+    default: rows = [];
+  }
+  rows = rows.slice().sort((a,b)=>(b.score||0)-(a.score||0));
+  if (!rows.length){ el.innerHTML = `<div class="empty">Nessuna posizione in questa sezione. Abbassa la soglia o rilancia la ricerca.</div>`; return; }
+  const badgeMap = {DIAMOND:["💎 DIAMOND","b-diamond"], GOLD:["🥇 GOLD","b-gold"], SILVER:["🥈 SILVER","b-silver"],
+    STRATEGIC_INTERNSHIP:["🎓 STRATEGIC INTERNSHIP","b-intern"], HIGH_VALUE_PART_TIME:["⏱️ HIGH-VALUE PART-TIME","b-parttime"]};
+  el.innerHTML = rows.map(r=>{
+    const [label,cls] = badgeMap[r.priority] || [r.priority,"b-silver"];
+    const summary = `${r.title} — ${r.company} | ${label} | Fit ${r.score}% (${r.band}) | ${r.experience_required} | ${r.compensation} | ${r.remote_scope} | ${r.source_url}`;
+    return `<div class="job">
+      <span class="badge ${cls}">${label}</span><span class="badge b-score">${r.band} · ${r.score}%</span>
+      <h3>${escapeHtml(r.title)} — ${escapeHtml(r.company)}</h3>
+      <div class="jobmeta">Fonte: ${escapeHtml(r.source||"")} · Confidenza: ${escapeHtml(r.confidence||"")}</div>
+      <div class="row"><b>Esperienza richiesta:</b> ${escapeHtml(r.experience_required)}</div>
+      <div class="row"><b>Remote scope:</b> ${escapeHtml(r.remote_scope)}</div>
+      <div class="row"><b>Restrizioni geografiche:</b> ${escapeHtml(r.country_restrictions)}</div>
+      <div class="row"><b>Compenso:</b> ${escapeHtml(r.compensation)}${r.compensation_guaranteed?"":" (non garantito)"}</div>
+      <div class="row"><b>Contratto:</b> ${escapeHtml(r.contract_type)}</div>
+      ${r.is_watchlisted ? `<div class="penalty">🏷️ Azienda in watchlist — verifica la singola vacancy.</div>` : ""}
+      ${r.mandatory_found && r.mandatory_found.length ? `<div class="reasons"><b>Condizioni obbligatorie:</b> ${escapeHtml(r.mandatory_found.join("; "))}</div>` : ""}
+      ${r.reasons && r.reasons.length ? `<div class="reasons">Motivi: ${escapeHtml(r.reasons.join(" · "))}</div>` : ""}
+      ${r.penalties && r.penalties.length ? `<div class="penalty">⚠️ ${escapeHtml(r.penalties.join(" · "))}</div>` : ""}
+      ${r.source_url ? `<a class="linkbtn" href="${escapeHtml(r.source_url)}" target="_blank" rel="noopener">Apri vacancy originale ↗</a>` : ""}
+      <details class="desc"><summary>📋 Copia riepilogo</summary><pre class="summary">${escapeHtml(summary)}</pre></details>
+      <div class="actions">
+        <select onchange="setStatus('${r.job_id.replace(/'/g,"\\'")}', this.value)">
+          ${["new","saved","applied","interviewing","rejected","archived"].map(s=>`<option value="${s}" ${s===r.status?"selected":""}>${s}</option>`).join("")}
+        </select>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function exportCsv(){
+  if (!LAST_ASSESSED.length){ alert("Nessuna posizione da esportare - esegui prima una ricerca."); return; }
+  const headers = ["title","company","source","priority","score","band","confidence","experience_required","compensation","remote_scope","contract_type","status","source_url"];
+  const rows = [headers.join(",")].concat(LAST_ASSESSED.map(r => headers.map(h => `"${String(r[h]??"").replace(/"/g,'""')}"`).join(",")));
+  const blob = new Blob([rows.join("\n")], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "daniele_job_radar_export.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function escapeHtml(s){ return (s||"").toString().replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+buildSectionSelect();
+</script>
+</body>
+</html>

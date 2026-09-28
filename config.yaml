@@ -1,0 +1,258 @@
+profile:
+  name: Daniele Casale
+  education:
+    - Bachelor's degree in Business Economics
+    - International Master in Digital Innovation for New Business Design
+    - Specialisation in Digital Product & Strategy
+    - UX and user-centred design knowledge
+  target_titles:
+    - junior product manager
+    - associate product manager
+    - junior product owner
+    - product operations
+    - product marketing
+    - ai product builder
+    - ai builder
+    - digital transformation analyst
+    - business analyst
+    - business development analyst
+    - innovation analyst
+    - marketing operations
+    - customer insights
+    - crm
+    - retail technology
+    - digital commerce
+    - process improvement
+    - ai business evaluator
+    - ai trainer
+    - product management ai expert
+  strengths:
+    - product management
+    - kpi monitoring
+    - market volume reporting
+    - competitive benchmarking
+    - interactive dashboard
+    - data visualisation
+    - ai enabled process automation
+    - requirements gathering
+    - stakeholder collaboration
+    - fashion retail
+    - crm
+    - customer insights
+    - team coordination
+    - sales kpi
+    - conversion rate
+    - audit
+    - consulting
+    - business design
+    - financial forecasting
+    - digital product development
+    - mvp development
+    - firebase
+    - visual studio code
+    - ai assisted development
+  sectors:
+    - digital products
+    - artificial intelligence
+    - saas
+    - fintech
+    - digital public services
+    - automotive
+    - fashion
+    - retail
+    - outdoor and action sports
+    - consulting
+    - travel technology
+    - innovation and venture building
+  languages_spoken:
+    italian: native
+    english: professional
+    spanish: advanced
+    french: basic
+  # "basic" French means the profile does NOT reliably cover roles that
+  # require French at a working/fluent level - treated as a gap, not a strength.
+  future_relocation_interest:
+    - bolivia
+    - south america
+    - latin america
+
+hard_filters:
+  # Applied to every job before priority classification, regardless of score.
+  exclude_unpaid: true
+  exclude_volunteer: true
+  exclude_commission_only: true
+  exclude_equity_only: true
+  exclude_bounty_only: true
+  exclude_internships_by_default: true   # unless it qualifies for STRATEGIC INTERNSHIP
+  max_experience_years: 1                 # 2 allowed only if explicitly "preferred", never mandatory
+
+diamond:
+  max_experience_years: 1
+  max_experience_years_if_preferred: 2
+  min_annual_salary_eur: 40000
+  role_keywords:
+    - product management
+    - product operations
+    - product marketing
+    - digital product
+    - ai product
+    - ai builder
+    - digital transformation
+  worldwide_evidence:
+    - worldwide remote
+    - remote worldwide
+    - work from anywhere
+    - applicants from all countries
+    - globally distributed
+    - no location restriction
+    - no location restrictions
+    - international contractor
+    - employer of record
+    - "eor available"
+  worldwide_exclusions:
+    - us only
+    - u.s. only
+    - united states only
+    - uk only
+    - united kingdom only
+    - canada only
+    - eu only
+    - european union only
+    - emea only
+    - must be based in
+    - must reside in
+    - remote within
+    - timezone overlap required
+    - work permit for
+    - must have the right to work in
+
+gold:
+  max_experience_years: 1
+  max_experience_years_if_preferred: 2
+  min_hourly_rate_for_annualisation: 0    # annualise only when hours are guaranteed - see scoring.py
+  preferred_locations:
+    - chiasso
+    - stabio
+    - mendrisio
+    - rancate
+    - lugano
+    - manno
+    - bioggio
+    - agno
+    - bellinzona
+    - ticino
+    - milano
+    - milan
+  role_keywords:
+    - product management
+    - product marketing
+    - ai builder
+    - digital product
+    - business analysis
+    - business development
+    - marketing operations
+    - customer insights
+    - retail technology
+    - digital commerce
+    - innovation
+    - process improvement
+    - category analysis
+    - commercial analysis
+  compensation_preference_chf_fulltime: 55000
+  compensation_preference_chf_50pct: 27500
+  office_days_scoring:
+    "1": positive
+    "2": positive
+    "3": acceptable
+    "4": penalty
+    "5": penalty
+
+silver:
+  max_experience_years: 1
+  min_annual_salary_eur: 40000
+  min_compatibility_if_salary_missing: 90
+  role_keywords:
+    - product management
+    - product operations
+    - product marketing
+    - ai builder
+    - digital transformation
+    - business analysis
+    - customer insights
+    - retail technology
+    - marketing operations
+  eligible_remote_scope:
+    - italy
+    - europe
+
+strategic_internship:
+  conditions:
+    - internationally recognised company
+    - direct relevance to product, ai, digital or retail technology
+    - structured development programme
+    - clear compensation
+    - clear responsibilities
+    - strong employability after completion
+    - canton ticino or highly flexible remote arrangement
+    - meaningfully stronger learning value than a generic internship
+  minimum_conditions_met: 5   # "most of these" -> require at least 5 of 8
+
+high_value_part_time:
+  min_hours_per_week: 15
+  max_hours_per_week: 25
+  min_workload_pct: 40
+  max_workload_pct: 60
+  min_contractor_hourly_rate_eur_usd: 25
+  reference_employee_net_monthly_eur_20h: 1300
+  role_keywords:
+    - product
+    - ai
+    - business
+    - crm
+    - analytics
+    - digital commerce
+    - process improvement
+
+watchlist_companies:
+  - PagoPA
+  - Product People
+  - Revolut
+  - Satispay
+  - Google
+  - Remote
+  - Canonical
+  - GitLab
+  - Automattic
+  - Camunda
+  - Storyblok
+  - Launchmetrics
+  - Sysdig
+  - 360dialog
+  - Bending Spoons
+  - ShippyPro
+  - Jet HR
+  - lastminute.com
+  - VF Corporation
+  - BMW Group
+  - Medacta
+  - Deloitte
+  - Kering
+  - Drommer
+
+scoring:
+  # Percent weights, must sum to 100.
+  role_weight: 20
+  skills_weight: 20
+  seniority_weight: 15
+  location_weight: 15
+  contract_compensation_weight: 10
+  sector_weight: 8
+  growth_weight: 5
+  language_weight: 4
+  brand_weight: 3
+  bands:
+    apply_now: 90
+    strong_opportunity: 82
+    consider: 75
+    stretch: 65
+    # below stretch -> "Hidden"

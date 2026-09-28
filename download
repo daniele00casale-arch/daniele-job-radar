@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+job_radar.db
+.env
+credentials.json
+token.json
