@@ -78,7 +78,7 @@ def make_job_id(company, title, url):
 
 
 def init_db(path=DB_PATH):
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.executescript(SCHEMA)
         conn.commit()
 
@@ -87,24 +87,28 @@ def upsert_job(job, priority, compatibility, path=DB_PATH):
     """Insert a newly-seen job, or update `date_last_seen` (and priority /
     compatibility, which can change run-to-run as descriptions get more
     complete) for one already known - without touching its status or
-    notes, which belong to the user's own tracking."""
+    notes, which belong to the user's own tracking.
+
+    Uses a single atomic "INSERT ... ON CONFLICT DO UPDATE" (SQLite UPSERT)
+    instead of a separate SELECT-then-INSERT/UPDATE. The two-step version
+    had a real race condition: Streamlit can re-run the script (a widget
+    interaction triggering a rerun while a previous run's DB write was
+    still in flight) fast enough that two calls both saw "not found" for
+    the same job_id and then both tried to INSERT, crashing with
+    "UNIQUE constraint failed: jobs.job_id". The single atomic statement
+    below can't race with itself - fixed and confirmed against the exact
+    error a real deployment hit."""
     job_id = make_job_id(job.get("company"), job.get("title"), job.get("url"))
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    with closing(sqlite3.connect(path)) as conn:
-        cur = conn.execute("SELECT job_id FROM jobs WHERE job_id = ?", (job_id,))
-        exists = cur.fetchone() is not None
-        if exists:
-            conn.execute(
-                "UPDATE jobs SET date_last_seen=?, priority=?, compatibility=? WHERE job_id=?",
-                (now, priority, compatibility, job_id),
-            )
-        else:
-            conn.execute(
-                "INSERT INTO jobs (job_id, title, company, source, original_url, priority, compatibility, "
-                "status, notes, date_first_seen, date_last_seen) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (job_id, job.get("title"), job.get("company"), job.get("source"), job.get("url"),
-                 priority, compatibility, "new", "", now, now),
-            )
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
+        conn.execute(
+            "INSERT INTO jobs (job_id, title, company, source, original_url, priority, compatibility, "
+            "status, notes, date_first_seen, date_last_seen) VALUES (?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(job_id) DO UPDATE SET date_last_seen=excluded.date_last_seen, "
+            "priority=excluded.priority, compatibility=excluded.compatibility",
+            (job_id, job.get("title"), job.get("company"), job.get("source"), job.get("url"),
+             priority, compatibility, "new", "", now, now),
+        )
         conn.commit()
     return job_id
 
@@ -114,7 +118,7 @@ def set_status(job_id, status, path=DB_PATH):
         raise ValueError(f"invalid status: {status}")
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     date_field = {"applied": "application_date", "interviewing": "interview_date", "rejected": "rejection_date"}.get(status)
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         if date_field:
             conn.execute(f"UPDATE jobs SET status=?, {date_field}=? WHERE job_id=?", (status, now, job_id))
         else:
@@ -123,20 +127,20 @@ def set_status(job_id, status, path=DB_PATH):
 
 
 def set_notes(job_id, notes, path=DB_PATH):
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.execute("UPDATE jobs SET notes=? WHERE job_id=?", (notes, job_id))
         conn.commit()
 
 
 def get_all(path=DB_PATH):
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM jobs").fetchall()
         return [dict(r) for r in rows]
 
 
 def get_by_status(status, path=DB_PATH):
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM jobs WHERE status=?", (status,)).fetchall()
         return [dict(r) for r in rows]
@@ -155,7 +159,7 @@ def record_connector_status(source, status, jobs_retrieved=0, connection_error=N
     `status` is one of: ok / zero_results / failed / not_configured /
     unsupported / rate_limited - callers decide which, this just persists."""
     now = datetime.now(timezone.utc).isoformat()
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         cur = conn.execute("SELECT source FROM connector_status WHERE source=?", (source,))
         exists = cur.fetchone() is not None
         last_successful_clause = ", last_successful=?" if status == "ok" else ""
@@ -179,7 +183,7 @@ def record_connector_status(source, status, jobs_retrieved=0, connection_error=N
 
 
 def get_connector_status(path=DB_PATH):
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT * FROM connector_status").fetchall()
         return [dict(r) for r in rows]
@@ -187,7 +191,7 @@ def get_connector_status(path=DB_PATH):
 
 def log_refresh(total_collected, total_assessed, total_filtered, errors_count, path=DB_PATH):
     now = datetime.now(timezone.utc).isoformat()
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.execute(
             "INSERT INTO refresh_logs (ts, total_collected, total_assessed, total_filtered, errors_count) VALUES (?,?,?,?,?)",
             (now, total_collected, total_assessed, total_filtered, errors_count),
@@ -196,21 +200,21 @@ def log_refresh(total_collected, total_assessed, total_filtered, errors_count, p
 
 
 def last_refresh(path=DB_PATH):
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT * FROM refresh_logs ORDER BY id DESC LIMIT 1").fetchone()
         return dict(row) if row else None
 
 
 def is_gmail_message_processed(message_id, path=DB_PATH):
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         cur = conn.execute("SELECT 1 FROM processed_gmail_ids WHERE message_id=?", (message_id,))
         return cur.fetchone() is not None
 
 
 def mark_gmail_message_processed(message_id, label, outcome, path=DB_PATH):
     now = datetime.now(timezone.utc).isoformat()
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO processed_gmail_ids (message_id, label, processed_at, outcome) VALUES (?,?,?,?)",
             (message_id, label, now, outcome),
@@ -220,7 +224,7 @@ def mark_gmail_message_processed(message_id, label, outcome, path=DB_PATH):
 
 def delete_all_job_history(path=DB_PATH):
     """'Delete local job history' (spec section 29)."""
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.execute("DELETE FROM jobs")
         conn.commit()
 
@@ -228,7 +232,7 @@ def delete_all_job_history(path=DB_PATH):
 def delete_gmail_processed_ids(path=DB_PATH):
     """'Delete imported email data' (spec section 29) - removes only the
     processed-message-id bookkeeping; the app never stores email bodies."""
-    with closing(sqlite3.connect(path)) as conn:
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
         conn.execute("DELETE FROM processed_gmail_ids")
         conn.commit()
 
