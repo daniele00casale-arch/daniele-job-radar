@@ -9,6 +9,7 @@ import yaml
 
 import ats_connectors
 import connectors
+import cv_parser
 import db
 import scoring
 from email_parser import parse_eml_bytes
@@ -90,6 +91,38 @@ with st.expander("🔎 Filtri e fonti", expanded=False):
     include_ats = st.checkbox("Includi connettori aziendali watchlist (Greenhouse/Lever/Ashby/...)", value=True)
     sources_enabled = st.multiselect("Fonti aggregatore attive", base_sources + optional_sources, default=base_sources + optional_sources)
     uploaded = st.file_uploader("Importa alert LinkedIn/Indeed (.eml)", type=["eml"], accept_multiple_files=True)
+
+    st.divider()
+    st.markdown("**📄 Usa il tuo CV per il matching (opzionale)**")
+    st.caption("Carica il tuo CV: viene letto solo in questa sessione del browser (non viene salvato da nessuna parte) "
+               "ed estrae parole chiave di ruolo/competenza da confrontare con le descrizioni degli annunci, "
+               "in aggiunta a quelle già scritte in config.yaml. Rivedi tu quali tenere prima che vengano usate.")
+    cv_file = st.file_uploader("Il tuo CV (PDF, DOCX o TXT)", type=["pdf", "docx", "txt", "md"], key="cv_upload")
+    cv_keywords_accepted = st.session_state.get("cv_keywords_accepted", [])
+    if cv_file is not None:
+        cv_sig = f"{cv_file.name}:{cv_file.size}"
+        if st.session_state.get("cv_sig") != cv_sig:
+            try:
+                cv_text = cv_parser.extract_text(cv_file.getvalue(), cv_file.name)
+                st.session_state.cv_keywords_found = cv_parser.extract_keywords(cv_text)
+                st.session_state.cv_sig = cv_sig
+                st.session_state.cv_error = None
+            except Exception as e:
+                st.session_state.cv_error = str(e)
+                st.session_state.cv_keywords_found = []
+        if st.session_state.get("cv_error"):
+            st.warning(f"Non sono riuscito a leggere il CV: {st.session_state['cv_error']}")
+        elif st.session_state.get("cv_keywords_found"):
+            st.caption("Parole chiave trovate nel CV — togli la spunta a quelle che non vuoi usare per il matching:")
+            cv_keywords_accepted = []
+            for i, kw in enumerate(st.session_state["cv_keywords_found"]):
+                if st.checkbox(kw, value=True, key=f"cvkw_{i}"):
+                    cv_keywords_accepted.append(kw)
+            st.session_state.cv_keywords_accepted = cv_keywords_accepted
+            if st.button("🗑️ Rimuovi CV e parole chiave da questa sessione"):
+                for k in ("cv_sig", "cv_keywords_found", "cv_keywords_accepted", "cv_error"):
+                    st.session_state.pop(k, None)
+                st.rerun()
 
     st.divider()
     st.markdown("**Privacy e dati (sezione 29)**")
@@ -198,11 +231,22 @@ for j in jobs:
     unique[key] = j
 
 # --- assess + persist ---
+# If the user uploaded a CV and approved some extracted keywords, score
+# against a COPY of the config with those keywords merged into the profile
+# - config.yaml on disk is never modified, and nothing about the CV is
+# persisted anywhere (session-only, per cv_parser.py's own docstring).
+EFFECTIVE_CFG = CFG
+cv_keywords_accepted = st.session_state.get("cv_keywords_accepted", [])
+if cv_keywords_accepted:
+    EFFECTIVE_CFG = dict(CFG)
+    EFFECTIVE_CFG["profile"] = cv_parser.build_augmented_profile(CFG["profile"], cv_keywords_accepted)
+    st.caption(f"🎯 Matching arricchito con {len(cv_keywords_accepted)} parole chiave dal tuo CV.")
+
 assessed, filtered_out, diagnostics = [], [], []
-watchlist = CFG.get("watchlist_companies", [])
+watchlist = EFFECTIVE_CFG.get("watchlist_companies", [])
 for j in unique.values():
     try:
-        result = scoring.assess(j, CFG, watchlist_companies=watchlist)
+        result = scoring.assess(j, EFFECTIVE_CFG, watchlist_companies=watchlist)
     except Exception as e:
         result = {"title": j.get("title"), "company": j.get("company"), "filtered_out_reason": f"errore di valutazione: {e}", "priority": None}
         filtered_out.append(result)
