@@ -66,6 +66,42 @@ def is_internship(text):
 
 
 # --------------------------------------------------------------------------
+# seniority-by-TITLE hard exclusion (spec section 12) - separate from the
+# years-of-experience check above. A title like "Senior Product Manager"
+# or "Head of Growth" must be excluded even when the description never
+# states a number of years at all (exp is None -> the years-based check
+# alone treats that as "unclear", which is correct for missing experience
+# text but wrong for an explicit seniority WORD in the title itself). This
+# was a real gap found on live data: senior/director postings were slipping
+# through as "experience not clearly stated" instead of being excluded.
+# --------------------------------------------------------------------------
+SENIOR_TITLE_RX = re.compile(
+    r"\b(senior|sr\.?|lead|principal|staff|head of|head,|head\b(?!s)|director|vp\b|v\.p\.|"
+    r"vice president|chief\b|c-level|managing director|executive director)\b",
+    re.I,
+)
+# A few phrases that legitimately use one of the words above WITHOUT being
+# a senior role, so they're excluded from the exclusion (kept intentionally
+# short - anything not covered here still correctly requires manual review
+# via the "Filtered Out with Reasons" section, never silently guessed).
+SENIOR_TITLE_SAFE_PHRASES = ["team lead of interns", "junior lead generation", "lead generation"]
+
+
+def title_seniority_exclusion(title_text):
+    """Returns (excluded: bool, matched_term: str|None). Checked against
+    the job TITLE only (not the full description), to avoid false
+    positives from unrelated mentions like "reports to the Head of
+    Product" inside a junior role's own description."""
+    norm_title = (title_text or "").lower()
+    if any(safe in norm_title for safe in SENIOR_TITLE_SAFE_PHRASES):
+        return False, None
+    m = SENIOR_TITLE_RX.search(norm_title)
+    if m:
+        return True, m.group(0)
+    return False, None
+
+
+# --------------------------------------------------------------------------
 # experience
 # --------------------------------------------------------------------------
 EXPERIENCE_PATTERNS = [r"(\d+)\s*\+?\s*years?", r"minimum\s+(\d+)\s+years?", r"at least\s+(\d+)\s+years?"]
@@ -387,9 +423,18 @@ def assess(job, cfg, watchlist_companies=None):
     watchlist_companies = watchlist_companies or []
     is_watchlisted = any(w.lower() in company.lower() for w in watchlist_companies)
 
+    def _tag_watchlist(reason):
+        return f"WATCHLIST MATCH, NOT QUALIFIED - {reason}" if is_watchlisted else reason
+
     ok, why = payment_check(text)
     if not ok:
-        return {"filtered_out_reason": why, "priority": None, "title": job.get("title"), "company": company, "is_watchlisted": is_watchlisted}
+        return {"filtered_out_reason": _tag_watchlist(why), "priority": None, "title": job.get("title"), "company": company, "is_watchlisted": is_watchlisted}
+
+    senior_excluded, senior_term = title_seniority_exclusion(job.get("title", ""))
+    if senior_excluded:
+        reason = f"esclusa: titolo senior/dirigenziale non junior/entry-level ('{senior_term}' nel titolo)"
+        return {"filtered_out_reason": _tag_watchlist(reason),
+                "priority": None, "title": job.get("title"), "company": company, "is_watchlisted": is_watchlisted}
 
     internship = is_internship(text)
 
@@ -434,7 +479,7 @@ def assess(job, cfg, watchlist_companies=None):
             priority = "STRATEGIC_INTERNSHIP"
             mandatory_found = met
         else:
-            return {"filtered_out_reason": f"esclusa: stage che non soddisfa i criteri di Strategic Internship ({len(met)}/8 condizioni)",
+            return {"filtered_out_reason": _tag_watchlist(f"esclusa: stage che non soddisfa i criteri di Strategic Internship ({len(met)}/8 condizioni)"),
                     "priority": None, "title": job.get("title"), "company": company, "is_watchlisted": is_watchlisted}
 
     # ---------------- HIGH-VALUE PART-TIME (checked before full-time tiers) ----------------
