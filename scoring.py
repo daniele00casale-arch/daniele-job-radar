@@ -458,24 +458,48 @@ def assess(job, cfg, watchlist_companies=None):
             priority = "HIGH_VALUE_PART_TIME"
             mandatory_found = ["hours/workload explicitly stated"]
 
-    # ---------------- DIAMOND ----------------
+    # ---------------- DIAMOND / POTENTIAL DIAMOND ----------------
+    # A job that meets every Diamond condition except ONE unverifiable fact
+    # (salary not stated, or worldwide scope not explicit either way) is NOT
+    # silently dropped - it becomes POTENTIAL DIAMOND with the exact missing
+    # fact named, per the project's own rule that a high-fit role should
+    # never disappear just because one field wasn't published.
     if priority is None and not internship:
         role_hits = role_match(text, tier_role_keywords(cfg, "diamond"))
         exp_ok = experience_ok_for_tier(exp, preferred, cfg["diamond"]["max_experience_years"], cfg["diamond"]["max_experience_years_if_preferred"])
-        if role_hits and worldwide_evidence and exp_ok and comp_min_ok_eur is True:
-            priority = "DIAMOND"
-            mandatory_found = [f"role: {', '.join(role_hits[:3])}", "genuinely worldwide remote (explicit evidence)",
-                                f"seniority: {exp_text}", f"compensation: {comp['display']} (>= EUR 40,000)"]
-        elif role_hits and exp_ok:
-            # record WHY it didn't reach Diamond, then fall through to Gold/Silver checks below
-            if not worldwide_evidence:
-                penalties.append("non Diamond: remote worldwide non confermato esplicitamente")
-            if comp_min_ok_eur is None:
-                penalties.append("non Diamond: compenso non dichiarato (richiesto esplicitamente per Diamond)")
-            elif comp_min_ok_eur is False:
-                penalties.append(f"non Diamond: compenso sotto EUR 40.000 ({comp['display']})")
+        # "unclear" (candidate for POTENTIAL DIAMOND on remote-scope grounds)
+        # requires the text to at least mention remote/distributed work -
+        # NOT just the absence of an explicit country restriction. Without
+        # this, a purely on-site vacancy (e.g. "office in Lugano", no
+        # remote wording at all) would wrongly become "verify remote scope"
+        # instead of being left to the Gold/Silver checks below, since
+        # target_titles are unioned into every tier's role-keyword list.
+        mentions_remote_at_all = any(x in text for x in ["remote", "distributed", "anywhere", "work from home", "wfh"])
+        worldwide_unclear = (not worldwide_evidence) and mentions_remote_at_all and not any(x in text for x in cfg["diamond"]["worldwide_exclusions"])
+        if role_hits and exp_ok:
+            if worldwide_evidence and comp_min_ok_eur is True:
+                priority = "DIAMOND"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", "genuinely worldwide remote (explicit evidence)",
+                                    f"seniority: {exp_text}", f"compensation: {comp['display']} (>= EUR 40,000)"]
+            elif worldwide_evidence and comp_min_ok_eur is None:
+                priority = "POTENTIAL_DIAMOND"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", "genuinely worldwide remote (explicit evidence)", f"seniority: {exp_text}"]
+                penalties.append("POTENTIAL DIAMOND - Salary to verify (salario non dichiarato)")
+            elif worldwide_unclear and comp_min_ok_eur is True:
+                priority = "POTENTIAL_DIAMOND"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", f"seniority: {exp_text}", f"compensation: {comp['display']} (>= EUR 40,000)"]
+                penalties.append("POTENTIAL DIAMOND - Remote scope to verify (worldwide non confermato né escluso esplicitamente)")
+            elif worldwide_unclear and comp_min_ok_eur is None:
+                priority = "POTENTIAL_DIAMOND"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", f"seniority: {exp_text}"]
+                penalties.append("POTENTIAL DIAMOND - Remote scope to verify AND Salary to verify")
+            else:
+                if not worldwide_evidence:
+                    penalties.append("non Diamond: remote worldwide esplicitamente escluso o non presente")
+                if comp_min_ok_eur is False:
+                    penalties.append(f"non Diamond: compenso sotto EUR 40.000 ({comp['display']})")
 
-    # ---------------- GOLD ----------------
+    # ---------------- GOLD / POTENTIAL GOLD ----------------
     if priority is None and not internship:
         role_hits = role_match(text, tier_role_keywords(cfg, "gold"))
         location_ok = gold_location_ok(text, cfg)
@@ -489,14 +513,17 @@ def assess(job, cfg, watchlist_companies=None):
                     preferred_found.append(f"~{days} giorni/settimana in ufficio (stima) - accettabile")
                 else:
                     penalties.append(f"~{days} giorni/settimana in ufficio (stima) - pesa negativamente")
-            priority = "GOLD"
-            mandatory_found = [f"role: {', '.join(role_hits[:3])}", "location: Ticino/Milano area", f"seniority: {exp_text}"]
-            if not comp["found"]:
-                penalties.append("Salary not disclosed - riduce la confidenza ma non esclude il ruolo da Gold")
+            if comp["found"]:
+                priority = "GOLD"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", "location: Ticino/Milano area", f"seniority: {exp_text}", f"compensation: {comp['display']}"]
+            else:
+                priority = "POTENTIAL_GOLD"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", "location: Ticino/Milano area", f"seniority: {exp_text}"]
+                penalties.append("POTENTIAL GOLD - Salary not disclosed")
         elif role_hits and exp_ok and not location_ok:
             penalties.append("non Gold: location fuori dall'area Ticino/Milano")
 
-    # ---------------- SILVER ----------------
+    # ---------------- SILVER / POTENTIAL SILVER ----------------
     if priority is None and not internship:
         role_hits = role_match(text, tier_role_keywords(cfg, "silver"))
         remote_scope = silver_remote_scope(text, cfg)
@@ -511,10 +538,10 @@ def assess(job, cfg, watchlist_companies=None):
                     penalties.append(f"non Silver: compenso sotto EUR 40.000 ({comp['display']})")
             else:
                 if score >= cfg["silver"]["min_compatibility_if_salary_missing"]:
-                    priority = "SILVER"
+                    priority = "POTENTIAL_SILVER"
                     mandatory_found = [f"role: {', '.join(role_hits[:3])}", "remote scope: Italy/Europe (Italy eligible)",
                                         f"seniority: {exp_text}", "compensation unverified but compatibility >= 90%"]
-                    penalties.append("Salary not disclosed - mantenuta solo per compatibilità >= 90%")
+                    penalties.append("POTENTIAL SILVER - Salary not disclosed, mantenuta per compatibilità >= 90%")
                 else:
                     penalties.append(f"non Silver: Salary not disclosed e compatibilità {score}% < 90% richiesto senza stipendio")
 
@@ -522,8 +549,11 @@ def assess(job, cfg, watchlist_companies=None):
         reason = "nessun livello di priorità soddisfa tutte le condizioni obbligatorie"
         if internship:
             reason = "stage non qualificato come Strategic Internship"
+        if is_watchlisted:
+            reason = "WATCHLIST MATCH, NOT QUALIFIED - " + reason
         return {"filtered_out_reason": reason, "priority": None, "title": job.get("title"), "company": company,
-                "score": score, "penalties": penalties, "is_watchlisted": is_watchlisted}
+                "score": score, "penalties": penalties, "is_watchlisted": is_watchlisted,
+                "confidence": confidence, "exp": exp, "worldwide_evidence": worldwide_evidence, "comp_found": comp["found"]}
 
     return {
         "title": job.get("title"), "company": company, "source": job.get("source"), "url": job.get("url"),
@@ -534,4 +564,47 @@ def assess(job, cfg, watchlist_companies=None):
         "country_restrictions": country_restrictions, "compensation": comp["display"],
         "compensation_guaranteed": comp["guaranteed"], "contract_type": job.get("employment_type") or "n/d",
         "is_watchlisted": is_watchlisted, "filtered_out_reason": None,
+    }
+
+
+# --------------------------------------------------------------------------
+# Diagnostic report (spec section 28) - per-job breakdown of exactly which
+# fields were received/missing and which hard filters passed/failed, so the
+# "the app finds jobs but classifies very few" complaint is answerable by
+# looking at data, not by guessing.
+# --------------------------------------------------------------------------
+EXPECTED_FIELDS = ["title", "company", "location", "description", "employment_type", "seniority", "salary", "url", "published_at", "source"]
+
+REJECTION_TAXONOMY = [
+    ("seniority mismatch", lambda r: r.get("exp") is not None and r["exp"] > 2),
+    ("salary below threshold", lambda r: r.get("comp_found") and "sotto EUR" in " ".join(r.get("penalties", []))),
+    ("salary missing", lambda r: not r.get("comp_found")),
+    ("remote scope unclear", lambda r: r.get("worldwide_evidence") is False),
+    ("role-family mismatch", lambda r: "nessun livello di priorità" in (r.get("filtered_out_reason") or "") and not r.get("exp")),
+    ("unpaid", lambda r: "compenso non ammesso" in (r.get("filtered_out_reason") or "")),
+    ("duplicate", lambda r: False),  # deduplication happens in app.py before assess(), flagged separately there
+]
+
+
+def diagnose(job, result):
+    """Build one diagnostic row for the Diagnostic Report / Parsing Failures
+    dashboard sections. `result` is the dict already returned by assess()."""
+    fields_received = [f for f in EXPECTED_FIELDS if to_text(job.get(f)).strip()]
+    fields_missing = [f for f in EXPECTED_FIELDS if f not in fields_received]
+    hard_filters_failed = []
+    if result.get("filtered_out_reason") and "compenso non ammesso" in result["filtered_out_reason"]:
+        hard_filters_failed.append("payment type")
+    if result.get("penalties"):
+        hard_filters_failed.extend([p for p in result["penalties"] if p.startswith("non ")])
+    rejection_tags = [tag for tag, cond in REJECTION_TAXONOMY if cond(result)] if result.get("priority") is None else []
+    return {
+        "source": job.get("source"), "title": job.get("title"), "company": job.get("company"),
+        "fields_received": fields_received, "fields_missing": fields_missing,
+        "score_before_hard_filters": result.get("score"),
+        "hard_filters_passed": result.get("priority") is not None,
+        "hard_filters_failed": hard_filters_failed or (["none - see priority/penalties"] if result.get("priority") else []),
+        "classification": result.get("priority") or "FILTERED_OUT",
+        "exclusion_reason": result.get("filtered_out_reason"),
+        "confidence": result.get("confidence"),
+        "rejection_tags": rejection_tags,
     }

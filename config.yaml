@@ -26,20 +26,27 @@ profile:
     - ai business evaluator
     - ai trainer
     - product management ai expert
+    - commercial analyst
+    - junior category manager
+    - junior growth
+    - cro
+    - conversion rate optimisation
   strengths:
     - product management
     - kpi monitoring
     - market volume reporting
     - competitive benchmarking
+    - market analysis
     - interactive dashboard
     - data visualisation
     - ai enabled process automation
     - requirements gathering
     - stakeholder collaboration
-    - fashion retail
+    - product and commercial reporting
+    - international fashion retail
     - crm
     - customer insights
-    - team coordination
+    - team coordination and coaching
     - sales kpi
     - conversion rate
     - audit
@@ -51,6 +58,8 @@ profile:
     - firebase
     - visual studio code
     - ai assisted development
+    - microsoft excel
+    - microsoft powerpoint
   sectors:
     - digital products
     - artificial intelligence
@@ -215,29 +224,64 @@ high_value_part_time:
 
 watchlist_companies:
   - PagoPA
-  - Product People
-  - Revolut
+  - VF Corporation
+  - BMW Group
+  - lastminute.com
+  - Medacta
   - Satispay
-  - Google
+  - Product People
   - Remote
   - Canonical
   - GitLab
   - Automattic
   - Camunda
   - Storyblok
-  - Launchmetrics
   - Sysdig
+  - Launchmetrics
   - 360dialog
-  - Bending Spoons
   - ShippyPro
   - Jet HR
-  - lastminute.com
-  - VF Corporation
-  - BMW Group
-  - Medacta
-  - Deloitte
+  - Revolut
   - Kering
-  - Drommer
+
+# Per-company ATS wiring for the connectors in ats_connectors.py (spec
+# section 5/6). Only entries with a `board_token`/`site_id`/`job_board_name`
+# were actually verified reachable in this build (see
+# connector_test_report.md) - Canonical and GitLab on Greenhouse, Camunda on
+# Ashby. Every other watchlist company is intentionally left UNCONFIGURED
+# rather than guessing a board token that was never confirmed live: an
+# unconfigured company still shows up in the Connector Status dashboard as
+# "requires manual configuration", it is never silently skipped. See
+# COMPANY_WATCHLIST_SETUP.md for exactly how to find and add a company's
+# real board token yourself (a few minutes each, no coding).
+ats_directory:
+  Canonical:
+    ats: greenhouse
+    board_token: canonical
+  GitLab:
+    ats: greenhouse
+    board_token: gitlab
+  Camunda:
+    ats: ashby
+    job_board_name: camunda
+  # Unconfigured (see COMPANY_WATCHLIST_SETUP.md to fill these in):
+  PagoPA: {ats: unconfigured}
+  VF Corporation: {ats: unconfigured}
+  BMW Group: {ats: unconfigured}
+  lastminute.com: {ats: unconfigured}
+  Medacta: {ats: unconfigured}
+  Satispay: {ats: unconfigured}
+  Product People: {ats: unconfigured}
+  Remote: {ats: unconfigured}
+  Automattic: {ats: unconfigured}
+  Storyblok: {ats: unconfigured}
+  Sysdig: {ats: unconfigured}
+  Launchmetrics: {ats: unconfigured}
+  360dialog: {ats: unconfigured}
+  ShippyPro: {ats: unconfigured}
+  Jet HR: {ats: unconfigured}
+  Revolut: {ats: unconfigured}
+  Kering: {ats: unconfigured}
 
 scoring:
   # Percent weights, must sum to 100.

@@ -34,8 +34,9 @@ Everything below can be done from a phone browser. It takes about 5 minutes the 
      paste in the contents of that file from this project.
 6. Scroll down, add a short commit message like "initial upload", and tap **Commit changes**.
 
-Your repository now contains `app.py`, `connectors.py`, `scoring.py`, `db.py`, `email_parser.py`,
-`gmail_connector.py`, `config.yaml`, `requirements.txt`, `.streamlit/config.toml`, and the rest.
+Your repository now contains `app.py`, `connectors.py`, `ats_connectors.py`, `scoring.py`, `db.py`,
+`email_parser.py`, `gmail_connector.py`, `config.yaml`, `requirements.txt`,
+`.streamlit/config.toml`, and the rest.
 
 ## Step 3 — Create a Streamlit Community Cloud account
 

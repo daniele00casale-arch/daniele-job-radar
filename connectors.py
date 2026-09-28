@@ -341,6 +341,151 @@ def fetch_adzuna(query="product manager", country=None, max_days_old=30, results
     return out
 
 
+# --------------------------------------------------------------------------
+# The Muse — https://www.themuse.com/api/public/jobs
+# Confirmed live response shape (WebFetch, this build): {page, page_count,
+# items_per_page, total, results:[{name(title), contents(HTML description),
+# publication_date, locations:[{name}], categories:[{name}], levels:[{name}],
+# company:{name}, refs:{landing_page}}]}. Optional API key supported via
+# THE_MUSE_API_KEY env var (raises the request quota; works without one).
+# --------------------------------------------------------------------------
+MUSE_CATEGORIES = ["Product Management", "Business & Strategy", "Data Science", "Marketing & PR",
+                    "Software Engineering", "Project & Program Management", "Retail"]
+MUSE_LEVELS = ["Entry Level", "Internship"]
+
+
+def fetch_the_muse(pages=1):
+    out = []
+    api_key = os.environ.get("THE_MUSE_API_KEY")
+    for page in range(1, pages + 1):
+        params = [("page", page)] + [("category", c) for c in MUSE_CATEGORIES] + [("level", l) for l in MUSE_LEVELS]
+        if api_key:
+            params.append(("api_key", api_key))
+        r = requests.get("https://www.themuse.com/api/public/jobs", params=params, headers=UA, timeout=TIMEOUT)
+        r.raise_for_status()
+        payload = r.json()
+        results = payload.get("results", [])
+        if not results:
+            break
+        for j in results:
+            company = (j.get("company") or {}).get("name", "")
+            locations = [l.get("name", "") for l in (j.get("locations") or [])]
+            location = ", ".join(locations) if locations else ""
+            categories = [c.get("name", "") for c in (j.get("categories") or [])]
+            levels = [l.get("name", "") for l in (j.get("levels") or [])]
+            description = clean_html(j.get("contents", ""))
+            out.append({
+                "source": "The Muse",
+                "source_id": str(j.get("id", "")),
+                "title": j.get("name", ""),
+                "company": company,
+                "location": location,
+                "worldwide": guess_worldwide(location, description),
+                "description": description + (f" Categoria: {', '.join(categories)}." if categories else ""),
+                "employment_type": "",
+                "seniority": to_text(levels),
+                "salary": extract_salary(description),
+                "url": (j.get("refs") or {}).get("landing_page", ""),
+                "published_at": to_iso_date(j.get("publication_date", "")),
+            })
+        total_pages = payload.get("page_count", 1)
+        if page >= total_pages:
+            break
+    return out
+
+
+# --------------------------------------------------------------------------
+# Remote OK — https://remoteok.com/api
+# Confirmed live response shape (WebFetch, this build): a JSON list whose
+# FIRST item is a legend/disclaimer object (no `id`), followed by job items
+# with slug, id, epoch, date, company, position, tags(list), description,
+# location, apply_url, salary_min, salary_max, url. Remote OK's own "region"
+# text is used to decide worldwide vs region-restricted - the word "remote"
+# alone is never treated as worldwide, per the project's own rule.
+# --------------------------------------------------------------------------
+def fetch_remoteok(tag="product"):
+    r = requests.get("https://remoteok.com/api", params={"tags": tag}, headers=UA, timeout=TIMEOUT)
+    r.raise_for_status()
+    payload = r.json()
+    out = []
+    for j in payload:
+        if not isinstance(j, dict) or not j.get("id"):
+            continue  # skip the legend/disclaimer item at index 0
+        description = clean_html(j.get("description", ""))
+        location = j.get("location", "") or ""
+        tags = j.get("tags") or []
+        salary_bits = [str(j.get("salary_min") or ""), str(j.get("salary_max") or "")]
+        salary = "-".join(b for b in salary_bits if b and b != "0").strip("-")
+        out.append({
+            "source": "Remote OK",
+            "source_id": str(j.get("id", "")),
+            "title": j.get("position", ""),
+            "company": j.get("company", ""),
+            "location": location,
+            # explicit=None -> falls through to text heuristics; Remote OK's
+            # own "location" field is frequently just "Worldwide" or a
+            # specific country, both already covered by guess_worldwide.
+            "worldwide": guess_worldwide(location, description + " " + " ".join(tags)),
+            "description": description + (" Tag: " + ", ".join(tags) if tags else ""),
+            "employment_type": "",
+            "seniority": "",
+            "salary": salary,
+            "url": j.get("apply_url") or j.get("url", ""),
+            "published_at": to_iso_date(j.get("epoch", "")),
+        })
+    return out
+
+
+# --------------------------------------------------------------------------
+# Jooble — https://jooble.org/api/{key} (POST), OPTIONAL, separate keys for
+# Italy and Switzerland (JOOBLE_API_KEY_IT / JOOBLE_API_KEY_CH env vars).
+# Documented response shape: {"totalCount": N, "jobs": [{title, location,
+# snippet, salary, source, type, link, updated, company}]}. Free tier has a
+# limited daily quota, so results are cached by app.py's st.cache_data and
+# this connector can be disabled entirely via the sources multiselect.
+# NOT LIVE-TESTED in this build: no Jooble credentials were provided.
+# --------------------------------------------------------------------------
+def jooble_configured(market="it"):
+    key = "JOOBLE_API_KEY_IT" if market == "it" else "JOOBLE_API_KEY_CH"
+    return bool(os.environ.get(key))
+
+
+def fetch_jooble(query="product manager", market="it"):
+    key_env = "JOOBLE_API_KEY_IT" if market == "it" else "JOOBLE_API_KEY_CH"
+    api_key = os.environ.get(key_env)
+    if not api_key:
+        raise RuntimeError(f"non configurato: imposta {key_env} (vedi .env.example) per attivare Jooble {market.upper()} - quota gratuita limitata, usare con parsimonia")
+    location = "Italy" if market == "it" else "Switzerland"
+    body = {"keywords": query, "location": location}
+    r = requests.post(f"https://jooble.org/api/{api_key}", json=body, headers={**UA, "Content-Type": "application/json"}, timeout=TIMEOUT)
+    r.raise_for_status()
+    payload = r.json()
+    out = []
+    for j in payload.get("jobs", []):
+        description = clean_html(j.get("snippet", ""))
+        location_text = j.get("location", "")
+        out.append({
+            "source": f"Jooble ({market.upper()})",
+            "source_id": str(j.get("id") or j.get("link", "")),
+            "title": j.get("title", ""),
+            "company": j.get("company", ""),
+            "location": location_text,
+            "worldwide": guess_worldwide(location_text, description),
+            "description": description,
+            "employment_type": j.get("type", ""),
+            "seniority": "",
+            "salary": to_text(j.get("salary", "")),
+            "url": j.get("link", ""),
+            "published_at": to_iso_date(j.get("updated", "")),
+        })
+    remaining_quota = r.headers.get("X-RateLimit-Remaining")  # not guaranteed by Jooble; shown only if present
+    if remaining_quota:
+        out_meta = {"_quota_remaining": remaining_quota}
+        if out:
+            out[0]["_jooble_quota_remaining"] = remaining_quota
+    return out
+
+
 def fetch_wwr():
     out = []
     for url in WWR_FEEDS:

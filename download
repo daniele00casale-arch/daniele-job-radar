@@ -2,6 +2,10 @@
 __pycache__/
 *.pyc
 job_radar.db
+*.db
 .env
 credentials.json
 token.json
+*.eml
+uploaded_emails/
+local_secrets/

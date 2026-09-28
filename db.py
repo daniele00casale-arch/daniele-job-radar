@@ -35,6 +35,35 @@ CREATE TABLE IF NOT EXISTS jobs (
     interview_date TEXT,
     rejection_date TEXT
 );
+CREATE TABLE IF NOT EXISTS connector_status (
+    source TEXT PRIMARY KEY,
+    enabled INTEGER DEFAULT 1,
+    configured INTEGER DEFAULT 1,
+    last_attempted TEXT,
+    last_successful TEXT,
+    jobs_retrieved INTEGER DEFAULT 0,
+    new_jobs INTEGER DEFAULT 0,
+    duplicates_removed INTEGER DEFAULT 0,
+    accepted_jobs INTEGER DEFAULT 0,
+    rejected_jobs INTEGER DEFAULT 0,
+    connection_error TEXT,
+    parsing_error TEXT,
+    status TEXT
+);
+CREATE TABLE IF NOT EXISTS refresh_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT,
+    total_collected INTEGER,
+    total_assessed INTEGER,
+    total_filtered INTEGER,
+    errors_count INTEGER
+);
+CREATE TABLE IF NOT EXISTS processed_gmail_ids (
+    message_id TEXT PRIMARY KEY,
+    label TEXT,
+    processed_at TEXT,
+    outcome TEXT
+);
 """
 
 VALID_STATUSES = ["new", "saved", "applied", "interviewing", "rejected", "archived"]
@@ -50,7 +79,7 @@ def make_job_id(company, title, url):
 
 def init_db(path=DB_PATH):
     with closing(sqlite3.connect(path)) as conn:
-        conn.execute(SCHEMA)
+        conn.executescript(SCHEMA)
         conn.commit()
 
 
@@ -118,3 +147,94 @@ def get_status_map(path=DB_PATH):
     app.py to overlay saved/applied/archived state onto freshly-fetched
     listings without a per-job query."""
     return {r["job_id"]: r for r in get_all(path)}
+
+
+def record_connector_status(source, status, jobs_retrieved=0, connection_error=None, parsing_error=None,
+                              configured=True, enabled=True, path=DB_PATH):
+    """Upsert one row of the Connector Status dashboard (spec section 24).
+    `status` is one of: ok / zero_results / failed / not_configured /
+    unsupported / rate_limited - callers decide which, this just persists."""
+    now = datetime.now(timezone.utc).isoformat()
+    with closing(sqlite3.connect(path)) as conn:
+        cur = conn.execute("SELECT source FROM connector_status WHERE source=?", (source,))
+        exists = cur.fetchone() is not None
+        last_successful_clause = ", last_successful=?" if status == "ok" else ""
+        params = [now, int(configured), int(enabled), jobs_retrieved, connection_error, parsing_error, status]
+        if status == "ok":
+            params.append(now)
+        if exists:
+            conn.execute(
+                f"UPDATE connector_status SET last_attempted=?, configured=?, enabled=?, jobs_retrieved=?, "
+                f"connection_error=?, parsing_error=?, status=?{last_successful_clause} WHERE source=?",
+                params + [source],
+            )
+        else:
+            conn.execute(
+                "INSERT INTO connector_status (source, last_attempted, configured, enabled, jobs_retrieved, "
+                "connection_error, parsing_error, status, last_successful) VALUES (?,?,?,?,?,?,?,?,?)",
+                [source, now, int(configured), int(enabled), jobs_retrieved, connection_error, parsing_error, status,
+                 now if status == "ok" else None],
+            )
+        conn.commit()
+
+
+def get_connector_status(path=DB_PATH):
+    with closing(sqlite3.connect(path)) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM connector_status").fetchall()
+        return [dict(r) for r in rows]
+
+
+def log_refresh(total_collected, total_assessed, total_filtered, errors_count, path=DB_PATH):
+    now = datetime.now(timezone.utc).isoformat()
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute(
+            "INSERT INTO refresh_logs (ts, total_collected, total_assessed, total_filtered, errors_count) VALUES (?,?,?,?,?)",
+            (now, total_collected, total_assessed, total_filtered, errors_count),
+        )
+        conn.commit()
+
+
+def last_refresh(path=DB_PATH):
+    with closing(sqlite3.connect(path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM refresh_logs ORDER BY id DESC LIMIT 1").fetchone()
+        return dict(row) if row else None
+
+
+def is_gmail_message_processed(message_id, path=DB_PATH):
+    with closing(sqlite3.connect(path)) as conn:
+        cur = conn.execute("SELECT 1 FROM processed_gmail_ids WHERE message_id=?", (message_id,))
+        return cur.fetchone() is not None
+
+
+def mark_gmail_message_processed(message_id, label, outcome, path=DB_PATH):
+    now = datetime.now(timezone.utc).isoformat()
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO processed_gmail_ids (message_id, label, processed_at, outcome) VALUES (?,?,?,?)",
+            (message_id, label, now, outcome),
+        )
+        conn.commit()
+
+
+def delete_all_job_history(path=DB_PATH):
+    """'Delete local job history' (spec section 29)."""
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute("DELETE FROM jobs")
+        conn.commit()
+
+
+def delete_gmail_processed_ids(path=DB_PATH):
+    """'Delete imported email data' (spec section 29) - removes only the
+    processed-message-id bookkeeping; the app never stores email bodies."""
+    with closing(sqlite3.connect(path)) as conn:
+        conn.execute("DELETE FROM processed_gmail_ids")
+        conn.commit()
+
+
+def export_all_data(path=DB_PATH):
+    """'Export personal data' (spec section 29) - everything this app has
+    stored about the user's own job search, as plain dicts ready for
+    json.dumps or a CSV writer."""
+    return {"jobs": get_all(path), "connector_status": get_connector_status(path)}

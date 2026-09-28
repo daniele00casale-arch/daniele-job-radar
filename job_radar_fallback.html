@@ -326,13 +326,28 @@ function assess(job){
   if (!priority && !internship){
     const roleHits = roleMatch(text, DIAMOND.roleKeywords.concat(PROFILE.targetTitles));
     const expOk = experienceOkForTier(exp, preferred, DIAMOND.maxExp, DIAMOND.maxExpPreferred);
-    if (roleHits.length && worldwide && expOk && compOkDiamond===true){
-      priority="DIAMOND";
-      mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "genuinely worldwide (explicit evidence)", `seniority: ${expText(exp,preferred)}`, `compensation: ${comp.display} (>= EUR 40,000)`];
-    } else if (roleHits.length && expOk){
-      if (!worldwide) penalties.push("non Diamond: remote worldwide non confermato esplicitamente");
-      if (compOkDiamond===null) penalties.push("non Diamond: compenso non dichiarato");
-      else if (compOkDiamond===false) penalties.push(`non Diamond: compenso sotto EUR 40.000 (${comp.display})`);
+    const mentionsRemoteAtAll = ["remote","distributed","anywhere","work from home","wfh"].some(x=>text.includes(x));
+    const worldwideUnclear = !worldwide && mentionsRemoteAtAll && !DIAMOND.worldwideExclusions.some(x=>text.includes(x));
+    if (roleHits.length && expOk){
+      if (worldwide && compOkDiamond===true){
+        priority="DIAMOND";
+        mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "genuinely worldwide (explicit evidence)", `seniority: ${expText(exp,preferred)}`, `compensation: ${comp.display} (>= EUR 40,000)`];
+      } else if (worldwide && compOkDiamond===null){
+        priority="POTENTIAL_DIAMOND";
+        mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "genuinely worldwide (explicit evidence)", `seniority: ${expText(exp,preferred)}`];
+        penalties.push("POTENTIAL DIAMOND - Salary to verify");
+      } else if (worldwideUnclear && compOkDiamond===true){
+        priority="POTENTIAL_DIAMOND";
+        mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, `seniority: ${expText(exp,preferred)}`, `compensation: ${comp.display} (>= EUR 40,000)`];
+        penalties.push("POTENTIAL DIAMOND - Remote scope to verify");
+      } else if (worldwideUnclear && compOkDiamond===null){
+        priority="POTENTIAL_DIAMOND";
+        mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, `seniority: ${expText(exp,preferred)}`];
+        penalties.push("POTENTIAL DIAMOND - Remote scope to verify AND Salary to verify");
+      } else {
+        if (!worldwide) penalties.push("non Diamond: remote worldwide esplicitamente escluso o non presente");
+        if (compOkDiamond===false) penalties.push(`non Diamond: compenso sotto EUR 40.000 (${comp.display})`);
+      }
     }
   }
 
@@ -341,9 +356,14 @@ function assess(job){
     const locationOk = goldLocationOk(text);
     const expOk = experienceOkForTier(exp, preferred, GOLD.maxExp, GOLD.maxExpPreferred);
     if (roleHits.length && locationOk && expOk){
-      priority="GOLD";
-      mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "location: Ticino/Milano area", `seniority: ${expText(exp,preferred)}`];
-      if (!comp.found) penalties.push("Salary not disclosed - riduce la confidenza ma non esclude da Gold");
+      if (comp.found){
+        priority="GOLD";
+        mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "location: Ticino/Milano area", `seniority: ${expText(exp,preferred)}`, `compensation: ${comp.display}`];
+      } else {
+        priority="POTENTIAL_GOLD";
+        mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "location: Ticino/Milano area", `seniority: ${expText(exp,preferred)}`];
+        penalties.push("POTENTIAL GOLD - Salary not disclosed");
+      }
     } else if (roleHits.length && expOk && !locationOk){
       penalties.push("non Gold: location fuori dall'area Ticino/Milano");
     }
@@ -359,8 +379,8 @@ function assess(job){
         if (compOkSilver){ priority="SILVER"; mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "remote scope: Italy/Europe", `seniority: ${expText(exp,preferred)}`, `compensation: ${comp.display}`]; }
         else penalties.push(`non Silver: compenso sotto EUR 40.000 (${comp.display})`);
       } else if (score >= SILVER.minCompatibilityIfSalaryMissing){
-        priority="SILVER"; mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "remote scope: Italy/Europe", `seniority: ${expText(exp,preferred)}`, "compensation unverified but compatibility >= 90%"];
-        penalties.push("Salary not disclosed - mantenuta solo per compatibilità >= 90%");
+        priority="POTENTIAL_SILVER"; mandatoryFound=[`role: ${roleHits.slice(0,3).join(", ")}`, "remote scope: Italy/Europe", `seniority: ${expText(exp,preferred)}`, "compensation unverified but compatibility >= 90%"];
+        penalties.push("POTENTIAL SILVER - Salary not disclosed, compatibilità >= 90%");
       } else penalties.push(`non Silver: Salary not disclosed e compatibilità ${score}% < 90%`);
     }
   }
@@ -510,8 +530,11 @@ function buildSectionSelect(){
   const opts = [
     ["new_today", `🆕 New Today (${LAST_ASSESSED.length})`],
     ["DIAMOND", `💎 Diamond (${countIn(r=>r.priority==="DIAMOND" && ["new","saved"].includes(r.status))})`],
+    ["POTENTIAL_DIAMOND", `💎 Potential Diamond (${countIn(r=>r.priority==="POTENTIAL_DIAMOND" && ["new","saved"].includes(r.status))})`],
     ["GOLD", `🥇 Gold (${countIn(r=>r.priority==="GOLD" && ["new","saved"].includes(r.status))})`],
+    ["POTENTIAL_GOLD", `🥇 Potential Gold (${countIn(r=>r.priority==="POTENTIAL_GOLD" && ["new","saved"].includes(r.status))})`],
     ["SILVER", `🥈 Silver (${countIn(r=>r.priority==="SILVER" && ["new","saved"].includes(r.status))})`],
+    ["POTENTIAL_SILVER", `🥈 Potential Silver (${countIn(r=>r.priority==="POTENTIAL_SILVER" && ["new","saved"].includes(r.status))})`],
     ["STRATEGIC_INTERNSHIP", `🎓 Strategic Internships (${countIn(r=>r.priority==="STRATEGIC_INTERNSHIP")})`],
     ["HIGH_VALUE_PART_TIME", `⏱️ High-Value Part-Time (${countIn(r=>r.priority==="HIGH_VALUE_PART_TIME")})`],
     ["watchlist", `🏷️ Watchlist Companies (${countIn(r=>r.is_watchlisted && ["new","saved"].includes(r.status))})`],
@@ -535,6 +558,7 @@ function renderSection(){
   switch(val){
     case "new_today": rows = LAST_ASSESSED; break;
     case "DIAMOND": case "GOLD": case "SILVER":
+    case "POTENTIAL_DIAMOND": case "POTENTIAL_GOLD": case "POTENTIAL_SILVER":
       rows = LAST_ASSESSED.filter(r=>r.priority===val && ["new","saved"].includes(r.status)); break;
     case "STRATEGIC_INTERNSHIP": case "HIGH_VALUE_PART_TIME":
       rows = LAST_ASSESSED.filter(r=>r.priority===val); break;
@@ -552,6 +576,7 @@ function renderSection(){
   rows = rows.slice().sort((a,b)=>(b.score||0)-(a.score||0));
   if (!rows.length){ el.innerHTML = `<div class="empty">Nessuna posizione in questa sezione. Abbassa la soglia o rilancia la ricerca.</div>`; return; }
   const badgeMap = {DIAMOND:["💎 DIAMOND","b-diamond"], GOLD:["🥇 GOLD","b-gold"], SILVER:["🥈 SILVER","b-silver"],
+    POTENTIAL_DIAMOND:["💎 POTENTIAL DIAMOND","b-diamond"], POTENTIAL_GOLD:["🥇 POTENTIAL GOLD","b-gold"], POTENTIAL_SILVER:["🥈 POTENTIAL SILVER","b-silver"],
     STRATEGIC_INTERNSHIP:["🎓 STRATEGIC INTERNSHIP","b-intern"], HIGH_VALUE_PART_TIME:["⏱️ HIGH-VALUE PART-TIME","b-parttime"]};
   el.innerHTML = rows.map(r=>{
     const [label,cls] = badgeMap[r.priority] || [r.priority,"b-silver"];

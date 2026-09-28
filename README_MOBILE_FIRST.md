@@ -42,20 +42,33 @@ needed). After that, it opens the dashboard in your normal browser every time yo
 
 ## What this app actually does
 
-It pulls job listings from 4 free public sources — Himalayas, Arbeitnow, Remotive, and We Work
-Remotely — and optionally two more if you set them up later (Adzuna, and a Gmail connector for
-LinkedIn/Indeed alert emails — both are advanced/optional, see below). It then sorts every listing
-into one of these buckets, and never fudges a hard rule to make something look better than it is:
+It pulls job listings from 6 free public sources with zero setup — Himalayas, Arbeitnow,
+Remotive, We Work Remotely, The Muse, and Remote OK — plus direct connectors to 3 watchlist
+companies' own career pages (Canonical, GitLab, Camunda), and optionally more if you set them up
+later: Adzuna, Jooble, more watchlist companies, and a Gmail connector for LinkedIn/Indeed alert
+emails (all advanced/optional — see `CONNECTOR_SETUP.md`, `COMPANY_WATCHLIST_SETUP.md`,
+`GMAIL_OAUTH_SETUP.md`). It then sorts every listing into one of these buckets, and never fudges
+a hard rule to make something look better than it is — but it also no longer silently drops a
+strong role just because ONE fact (salary, or remote scope) wasn't published: that's now a
+**Potential** version of the same tier, clearly labelled, instead of disappearing:
 
-- 💎 **Diamond** — genuinely worldwide remote (explicit evidence, not just the word "remote"),
-  junior/entry-level (max 1 year, 2 only if explicitly "preferred"), paid ≥ €40,000/year.
-- 🥇 **Gold** — based in/near Ticino or reachable from Milan, junior/entry-level, paid.
-- 🥈 **Silver** — remote from Italy or Europe (Italy explicitly eligible), junior/entry-level, paid ≥ €40,000/year (or ≥90% compatibility if salary isn't published).
+- 💎 **Diamond** / 💎 **Potential Diamond** — genuinely worldwide remote (explicit evidence, not
+  just the word "remote"), junior/entry-level (max 1 year, 2 only if explicitly "preferred"),
+  paid ≥ €40,000/year. Potential Diamond = every condition met except salary and/or remote scope
+  weren't explicitly confirmed either way.
+- 🥇 **Gold** / 🥇 **Potential Gold** — based in/near Ticino or reachable from Milan,
+  junior/entry-level, paid. Potential Gold = same, but salary wasn't published.
+- 🥈 **Silver** / 🥈 **Potential Silver** — remote from Italy or Europe (Italy explicitly
+  eligible), junior/entry-level, paid ≥ €40,000/year (or ≥90% compatibility if salary isn't published).
 - 🎓 **Strategic Internships** — only the internships that are actually worth your time.
 - ⏱️ **High-Value Part-Time** — real part-time roles with a stated hourly rate ≥ €/$25 and guaranteed hours.
-- Plus dedicated views for **New Today**, **Watchlist Companies**, **Salary Not Disclosed**,
-  **Remote Arrangement to Verify**, and your own **Applied / Interviewing / Rejected / Archived**
-  pipeline, plus **Filtered Out with Reasons** so you can see exactly why something didn't make it.
+- Plus dedicated views for **New Today**, **Company Watchlist**, **Watchlist Matches Not
+  Qualified**, **Salary Not Disclosed**, **Remote Scope to Verify**, **Experience to Verify**,
+  your own **Applied / Interviewing / Rejected / Archived** pipeline, **Filtered Out with
+  Reasons**, **Connector Status** (which sources worked, failed, or aren't configured — this is
+  the first place to check if you see fewer positions than expected), **Parsing Failures**, and a
+  full **Diagnostic Report** (every collected job with the fields it had, the fields it was
+  missing, and exactly which rule accepted or rejected it).
 
 Every card shows: title, company, location restrictions, salary (or "Salary not disclosed" — never
 a made-up number), contract type, experience required, compatibility score with the reason behind
@@ -74,24 +87,40 @@ your phone.
 
 | File | What it's for |
 |---|---|
-| `app.py`, `connectors.py`, `scoring.py`, `db.py`, `email_parser.py` | The Streamlit dashboard itself |
-| `gmail_connector.py` | Optional, advanced, **untested in this build** — see the file's own docstring before using it |
-| `config.yaml` | Your candidate profile, scoring weights, tier rules — edit this to tune the app |
+| `app.py`, `connectors.py`, `ats_connectors.py`, `scoring.py`, `db.py`, `email_parser.py` | The Streamlit dashboard itself |
+| `gmail_connector.py` | Optional, advanced, **untested end-to-end in this build** — see `GMAIL_OAUTH_SETUP.md` before using it |
+| `config.yaml` | Your candidate profile, scoring weights, tier rules, watchlist + ATS wiring — edit this to tune the app |
 | `requirements.txt` | What Streamlit Cloud (or your own machine) installs automatically |
 | `start_job_radar.bat` | Windows one-click launcher |
-| `job_radar_fallback.html` | The no-install single-page version |
+| `job_radar_fallback.html` | The no-install single-page version (same Diamond/Gold/Silver + Potential logic) |
 | `DEPLOY_STREAMLIT_CLOUD.md` | Exact phone-friendly deployment steps |
-| `test_report.md` | Exactly what was tested, how, and what's still unverified — no function is claimed to work without this |
-| `.env.example` | Copy to `.env` to turn on the optional Adzuna/Gmail connectors |
+| `CONNECTOR_SETUP.md` | How to turn on Adzuna/Jooble |
+| `COMPANY_WATCHLIST_SETUP.md` | How to wire up more watchlist companies' direct career-page connectors |
+| `GMAIL_OAUTH_SETUP.md` | Full Gmail/LinkedIn/Indeed connector setup |
+| `test_report.md`, `connector_test_report.md` | Exactly what was tested, how, and what's still unverified — no function is claimed to work without this |
+| `.env.example` | Copy to `.env` to turn on the optional Adzuna/Jooble/Gmail connectors |
 
-## Turning on the optional sources (Adzuna, Gmail) — later, not required
+## Turning on the optional sources — later, not required
 
-Both are off by default and the app works fully without them. Adzuna needs a free API key from
-adzuna.com/developer. The Gmail connector needs a Google Cloud OAuth setup and has **not been
-tested end-to-end** in this build (no test Gmail account was available) — read the top of
-`gmail_connector.py` before relying on it. Neither ever asks for your email password: Adzuna uses
-an API key you paste into `.env`, and Gmail uses Google's own sign-in screen, never a password
-typed anywhere in this project's files or in chat.
+Everything core works with zero setup. See `CONNECTOR_SETUP.md` for Adzuna/Jooble,
+`COMPANY_WATCHLIST_SETUP.md` for more direct company connectors, and `GMAIL_OAUTH_SETUP.md` for
+the Gmail/LinkedIn/Indeed connector (the most involved one, and **not tested end-to-end** in this
+build — no test Gmail account was available). None of these ever ask for your email password:
+API keys go into `.env` or Streamlit Cloud's Secrets panel, and Gmail uses Google's own sign-in
+screen, never a password typed anywhere in this project's files or in chat.
+
+## Diagnosing "I see too few positions"
+
+Open the **Connector Status** section first — it shows every source (aggregator and direct
+company connector) as one of: OK, zero results, failed, not configured, or unsupported/needs
+manual configuration. Zero results is never silently treated as proof a connector works. Then
+check **Diagnostic Report** for a full breakdown of every collected job — including a summary of
+the most common exclusion reasons (salary missing, seniority mismatch, remote scope unclear,
+etc.) — and **Filtered Out with Reasons** / **Watchlist Matches, Not Qualified** to see exactly
+why specific jobs didn't make it into Diamond/Gold/Silver. A high compatibility score is
+deliberately never allowed to override a hard requirement (paid-only, junior-only, genuinely
+worldwide, etc.) — that's a rule from the spec, not a bug — but a job missing just ONE fact
+(salary or remote scope) now shows up as **Potential Diamond/Gold/Silver** instead of vanishing.
 
 ## If something looks wrong
 
