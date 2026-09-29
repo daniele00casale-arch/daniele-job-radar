@@ -47,6 +47,7 @@ _KV_CLIENT_SECRET = "gmail_oauth_client_secret_enc"
 _KV_TOKEN = "gmail_oauth_token_enc"
 _KV_STATE = "gmail_oauth_state"  # short-lived CSRF token for the redirect round-trip
 _KV_REDIRECT_URI = "gmail_oauth_redirect_uri"  # the exact URI used to build the auth URL, reused at exchange time
+_KV_CODE_VERIFIER = "gmail_oauth_code_verifier_enc"  # PKCE verifier generated alongside the auth URL, needed again at exchange time
 
 
 def _streamlit_secrets():
@@ -165,7 +166,19 @@ def build_authorization_url(redirect_uri):
     sends back, to prevent a forged callback from a different OAuth flow
     being accepted; `redirect_uri` is reused as-is at exchange time so it
     is guaranteed to match exactly what was authorized (Google requires
-    an exact match)."""
+    an exact match).
+
+    google-auth-oauthlib auto-generates a PKCE `code_verifier` inside
+    `flow.authorization_url()` (it's on by default - Flow's
+    `autogenerate_code_verifier=True`) and embeds its hash as
+    `code_challenge` in the URL. That verifier lives only on this Flow
+    object in memory - it's not something Google echoes back on the
+    redirect - so it's persisted here too (encrypted, like the token)
+    and re-applied to the fresh Flow object exchange_code() has to build
+    in the next, unrelated Streamlit session. Without this, Google
+    rejects the token exchange with 'invalid_grant: Missing code
+    verifier', because the second Flow's request has no verifier
+    matching the challenge from the first."""
     from google_auth_oauthlib.flow import Flow
 
     client_id, client_secret = get_client_config()
@@ -186,6 +199,7 @@ def build_authorization_url(redirect_uri):
     )
     db.set_kv(_KV_STATE, state)
     db.set_kv(_KV_REDIRECT_URI, redirect_uri)
+    db.set_kv(_KV_CODE_VERIFIER, encryption.encrypt(flow.code_verifier) if flow.code_verifier else None)
     return auth_url, state
 
 
@@ -200,6 +214,7 @@ def exchange_code(code, state):
 
     expected_state = db.get_kv(_KV_STATE)
     redirect_uri = db.get_kv(_KV_REDIRECT_URI)
+    enc_verifier = db.get_kv(_KV_CODE_VERIFIER)
     if not expected_state or state != expected_state:
         raise RuntimeError(
             "stato OAuth non corrispondente (possibile richiesta scaduta o duplicata) - "
@@ -218,6 +233,11 @@ def exchange_code(code, state):
         scopes=SCOPES,
         redirect_uri=redirect_uri,
     )
+    if enc_verifier:
+        # Re-attach the SAME PKCE verifier used to build the authorization
+        # URL (see build_authorization_url's docstring) - this Flow object
+        # is otherwise brand new and would generate none on its own.
+        flow.code_verifier = encryption.decrypt(enc_verifier)
     flow.fetch_token(code=code)
     creds = flow.credentials
     granted = set(creds.scopes or [])
@@ -230,6 +250,7 @@ def exchange_code(code, state):
         )
     db.set_kv(_KV_TOKEN, encryption.encrypt(creds.to_json()))
     db.set_kv(_KV_REDIRECT_URI, None)
+    db.set_kv(_KV_CODE_VERIFIER, None)
     return True
 
 
