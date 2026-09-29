@@ -7,11 +7,3 @@ python-dotenv>=1.0
 PyYAML>=6.0
 pypdf>=4.0
 python-docx>=1.1
-
-# --- Gmail OAuth wizard (Connect/Disconnect Gmail, gmail.readonly only) ---
-google-api-python-client>=2.100
-google-auth-httplib2>=0.2
-google-auth-oauthlib>=1.2
-# Local at-rest encryption for the Gmail OAuth Client Secret / token when
-# they are entered through the in-app wizard instead of Streamlit Secrets.
-cryptography>=42.0
