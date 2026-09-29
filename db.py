@@ -64,6 +64,11 @@ CREATE TABLE IF NOT EXISTS processed_gmail_ids (
     processed_at TEXT,
     outcome TEXT
 );
+CREATE TABLE IF NOT EXISTS secure_kv (
+    k TEXT PRIMARY KEY,
+    v TEXT,
+    updated_at TEXT
+);
 """
 
 VALID_STATUSES = ["new", "saved", "applied", "interviewing", "rejected", "archived"]
@@ -219,6 +224,34 @@ def mark_gmail_message_processed(message_id, label, outcome, path=DB_PATH):
             "INSERT OR REPLACE INTO processed_gmail_ids (message_id, label, processed_at, outcome) VALUES (?,?,?,?)",
             (message_id, label, now, outcome),
         )
+        conn.commit()
+
+
+def set_kv(key, value, path=DB_PATH):
+    """Generic small key/value store, used only for the (already-encrypted
+    by the caller - see encryption.py) Gmail OAuth client config and
+    token. `value=None` deletes the key instead of storing a null."""
+    if value is None:
+        return delete_kv(key, path)
+    now = datetime.now(timezone.utc).isoformat()
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
+        conn.execute(
+            "INSERT INTO secure_kv (k, v, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(k) DO UPDATE SET v=excluded.v, updated_at=excluded.updated_at",
+            (key, value, now),
+        )
+        conn.commit()
+
+
+def get_kv(key, path=DB_PATH):
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
+        row = conn.execute("SELECT v FROM secure_kv WHERE k=?", (key,)).fetchone()
+        return row[0] if row else None
+
+
+def delete_kv(key, path=DB_PATH):
+    with closing(sqlite3.connect(path, timeout=15)) as conn:
+        conn.execute("DELETE FROM secure_kv WHERE k=?", (key,))
         conn.commit()
 
 

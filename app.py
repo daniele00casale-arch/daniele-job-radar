@@ -16,6 +16,7 @@ from email_parser import parse_eml_bytes
 
 try:
     import gmail_connector
+    import gmail_oauth
     GMAIL_MODULE_OK = True
 except Exception:
     GMAIL_MODULE_OK = False
@@ -52,6 +53,29 @@ with open("config.yaml", encoding="utf-8") as f:
 
 db.init_db()
 
+# ---------------------------------------------------------------------------
+# Gmail OAuth callback - Google redirects the browser back to THIS app's own
+# URL with ?code=...&state=... after the person approves the consent screen
+# (wizard step 5). This is a brand-new page load (a new Streamlit session),
+# so it's handled unconditionally at the top of every run, before any UI is
+# built, using only what gmail_oauth.py stored server-side (never
+# session_state, which would already be gone by now).
+# ---------------------------------------------------------------------------
+if GMAIL_MODULE_OK:
+    qp = st.query_params
+    if "code" in qp and "state" in qp:
+        try:
+            gmail_oauth.exchange_code(qp["code"], qp["state"])
+            st.session_state["gmail_wizard_message"] = ("success", "✅ Gmail connesso correttamente.")
+        except Exception as e:
+            st.session_state["gmail_wizard_message"] = ("error", f"Connessione Gmail non riuscita: {e}")
+        st.query_params.clear()
+        st.rerun()
+    if "error" in qp:  # Google itself reports a denial/error via ?error=...
+        st.session_state["gmail_wizard_message"] = ("error", f"Google ha segnalato un errore: {qp['error']}")
+        st.query_params.clear()
+        st.rerun()
+
 PRIORITY_BADGES = {
     "DIAMOND": ("💎 DIAMOND", "badge-diamond"),
     "POTENTIAL_DIAMOND": ("💎 POTENTIAL DIAMOND", "badge-potential"),
@@ -84,13 +108,14 @@ with st.expander("🔎 Filtri e fonti", expanded=False):
         optional_sources.append("Jooble")
     else:
         st.caption("⚪ Jooble: non configurato (opzionale — imposta JOOBLE_API_KEY_IT/JOOBLE_API_KEY_CH, vedi CONNECTOR_SETUP.md)")
-    if GMAIL_MODULE_OK and gmail_connector.gmail_configured():
-        optional_sources.append("Gmail (LinkedIn/Indeed alert)")
+    if GMAIL_MODULE_OK and gmail_connector.gmail_connected():
+        optional_sources.append("Gmail (LinkedIn/Indeed/Company alert)")
     else:
-        st.caption("⚪ Gmail: non configurato (opzionale e MAI testato end-to-end in questo ambiente — vedi GMAIL_OAUTH_SETUP.md)")
+        st.caption("⚪ Gmail: non connesso — apri **🔗 Configura Gmail** qui sotto per collegarlo in pochi passi.")
     include_ats = st.checkbox("Includi connettori aziendali watchlist (Greenhouse/Lever/Ashby/...)", value=True)
     sources_enabled = st.multiselect("Fonti aggregatore attive", base_sources + optional_sources, default=base_sources + optional_sources)
-    uploaded = st.file_uploader("Importa alert LinkedIn/Indeed (.eml)", type=["eml"], accept_multiple_files=True)
+    uploaded = st.file_uploader("Importa manualmente un alert LinkedIn/Indeed/azienda (.eml) — fallback se non usi Gmail",
+                                 type=["eml"], accept_multiple_files=True)
 
     st.divider()
     st.markdown("**📄 Usa il tuo CV per il matching (opzionale)**")
@@ -135,13 +160,123 @@ with st.expander("🔎 Filtri e fonti", expanded=False):
         st.download_button("⬇️ Scarica JSON", json.dumps(data, indent=2, default=str).encode("utf-8"),
                             file_name="job_radar_export.json", mime="application/json")
     if GMAIL_MODULE_OK:
-        gcol1, gcol2 = st.columns(2)
-        if gcol1.button("🔌 Disconnetti Gmail"):
-            gmail_connector.disconnect_gmail()
-            st.success("Token Gmail rimosso (se presente).")
-        if gcol2.button("🗑️ Elimina dati email importati"):
+        if st.button("🗑️ Elimina dati email importati"):
             db.delete_gmail_processed_ids()
-            st.success("ID messaggi Gmail elaborati eliminati.")
+            st.success("ID messaggi Gmail elaborati eliminati (i messaggi stessi non vengono mai toccati).")
+
+# ---------------------------------------------------------------------------
+# Gmail setup wizard (spec: OAuth, gmail.readonly only, three labels,
+# Connect/Disconnect buttons, no file editing, no terminal, no password).
+# ---------------------------------------------------------------------------
+with st.expander("🔗 Configura Gmail (wizard guidato, 5 passi)", expanded=not (GMAIL_MODULE_OK and gmail_connector.gmail_connected())):
+    if not GMAIL_MODULE_OK:
+        st.error("Le librerie Gmail non sono installate in questo ambiente. Verifica che requirements.txt contenga "
+                 "google-api-python-client, google-auth-oauthlib, google-auth-httplib2, cryptography e riavvia il deploy.")
+    else:
+        msg = st.session_state.pop("gmail_wizard_message", None)
+        if msg:
+            (st.success if msg[0] == "success" else st.error)(msg[1])
+
+        st.caption("La tua password Gmail non viene mai richiesta né vista da questa app. L'accesso e l'autorizzazione "
+                   "avvengono sempre sulla pagina ufficiale di Google (accounts.google.com). L'unico permesso richiesto è "
+                   "**di sola lettura** (gmail.readonly): questa app non può modificare, etichettare, inviare, inoltrare, "
+                   "archiviare o eliminare nessuna email.")
+
+        connected = gmail_connector.gmail_connected()
+
+        st.markdown("#### Passo 1 — Crea o conferma le tre etichette Gmail")
+        st.caption("Vanno create nella tua casella Gmail (una sola volta). Copia esattamente questi tre nomi:")
+        for lbl in gmail_oauth.DEFAULT_LABELS.values():
+            st.code(lbl, language=None)
+        st.link_button("Apri Impostazioni Gmail → Etichette ↗", "https://mail.google.com/mail/u/0/#settings/labels",
+                        use_container_width=True)
+        st.caption("Suggerimento: crea anche un filtro per ciascuna (Impostazioni → Filtri) che applichi automaticamente "
+                   "l'etichetta corrispondente alle email di LinkedIn/Indeed/altre aziende — vedi GMAIL_OAUTH_SETUP.md.")
+        labels_confirmed = st.checkbox("✅ Ho creato/confermato le tre etichette", value=st.session_state.get("gmail_labels_confirmed", False))
+        st.session_state["gmail_labels_confirmed"] = labels_confirmed
+
+        st.markdown("#### Passo 2 — Client ID e Client Secret di Google")
+        client_source = gmail_oauth.client_config_source()
+        if client_source in ("streamlit_secrets", "env"):
+            where = "Streamlit Secrets" if client_source == "streamlit_secrets" else "variabili d'ambiente (.env)"
+            st.success(f"Client ID/Secret trovati in {where} — il wizard li userà automaticamente, non serve altro qui.")
+        else:
+            st.caption("Da creare una sola volta nel tuo progetto Google Cloud (vedi GMAIL_OAUTH_SETUP.md per la procedura "
+                       "passo-passo con screenshot). Il Client Secret viene salvato **cifrato** nel database locale di questa "
+                       "app, non in chiaro, e non viene mai più mostrato dopo il salvataggio.")
+            st.link_button("Apri Google Cloud Console → Credenziali ↗", gmail_oauth.GOOGLE_CLOUD_CREDENTIALS_URL,
+                            use_container_width=True)
+            with st.form("gmail_client_config_form", clear_on_submit=True):
+                in_client_id = st.text_input("Client ID")
+                in_client_secret = st.text_input("Client Secret", type="password")
+                saved = st.form_submit_button("💾 Salva credenziali OAuth")
+            if saved:
+                try:
+                    gmail_oauth.save_client_config(in_client_id, in_client_secret)
+                    st.success("Credenziali salvate (cifrate).")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Non salvate: {e}")
+            if gmail_oauth.has_client_config():
+                st.success("✅ Client ID/Secret già configurati per questa app (valore non mostrato per sicurezza).")
+                if st.button("🗑️ Rimuovi credenziali OAuth salvate"):
+                    gmail_oauth.clear_client_config()
+                    st.rerun()
+
+        st.markdown("#### Passo 3 — Copia l'URI di reindirizzamento esatto in Google Cloud")
+        detected_base = gmail_oauth.detect_redirect_base_url()
+        if detected_base:
+            redirect_base = detected_base
+            st.caption("Rilevato automaticamente dall'app in esecuzione:")
+        else:
+            st.caption("Non sono riuscito a rilevare automaticamente l'URL di questa app (succede in alcuni ambienti locali). "
+                       "Incolla qui l'URL con cui apri l'app nel browser (es. https://tuo-progetto.streamlit.app):")
+            redirect_base = st.text_input("URL di questa app", value=st.session_state.get("gmail_manual_base_url", ""))
+            st.session_state["gmail_manual_base_url"] = redirect_base
+        redirect_uri = gmail_oauth.redirect_uri_from_base(redirect_base) if redirect_base else None
+        if redirect_uri:
+            st.code(redirect_uri, language=None)
+            st.caption("In Google Cloud Console → Credenziali → il tuo Client OAuth → 'URI di reindirizzamento autorizzati' → "
+                       "'Aggiungi URI' → incolla esattamente il valore sopra → Salva.")
+
+        st.markdown("#### Passo 4 — Connetti Gmail")
+        if connected:
+            st.success("✅ Gmail è già connesso.")
+        elif not gmail_oauth.has_client_config():
+            st.info("Completa prima il passo 2.")
+        elif not redirect_uri:
+            st.info("Completa prima il passo 3.")
+        else:
+            try:
+                auth_url, _ = gmail_oauth.build_authorization_url(redirect_uri)
+                st.link_button("🔐 Connetti Gmail (apre la schermata di autorizzazione Google)", auth_url, use_container_width=True)
+            except Exception as e:
+                st.error(f"Non riesco a preparare la connessione: {e}")
+
+        st.markdown("#### Passo 5 — Approva la schermata di autorizzazione Google")
+        st.caption("Dopo aver cliccato 'Connetti Gmail', Google mostrerà la sua pagina ufficiale con il permesso richiesto "
+                   "('Visualizza i messaggi email e le impostazioni' — di sola lettura). Approvandolo, Google reindirizza "
+                   "automaticamente qui e questa pagina mostrerà '✅ Gmail connesso correttamente'.")
+
+        st.divider()
+        if connected:
+            connected_email = st.session_state.get("gmail_connected_email")
+            if connected_email is None:
+                try:
+                    connected_email = gmail_oauth.connected_email_address()
+                except Exception as e:
+                    connected_email = f"(non verificabile ora: {e})"
+                st.session_state["gmail_connected_email"] = connected_email
+            st.write(f"**Account Gmail connesso:** {connected_email}")
+            gcol1, gcol2 = st.columns(2)
+            if gcol1.button("🔌 Disconnetti Gmail", use_container_width=True):
+                gmail_connector.disconnect_gmail()
+                st.session_state.pop("gmail_connected_email", None)
+                st.success("Token Gmail rimosso da questa app.")
+                st.rerun()
+            gcol2.link_button("Revoca l'accesso su Google ↗", gmail_oauth.REVOKE_URL, use_container_width=True)
+            st.caption("'Disconnetti Gmail' rimuove solo il token salvato da questa app. Per rimuovere del tutto l'accesso "
+                       "dal tuo account Google, usa 'Revoca l'accesso su Google'.")
 
 refresh = st.button("🔄 Aggiorna posizioni", type="primary", use_container_width=True)
 
@@ -182,8 +317,16 @@ def load(qs, sources, include_ats_flag, ats_directory_json):
         run("Arbeitnow", lambda: connectors.fetch_arbeitnow(pages=2))
     if "We Work Remotely" in sources:
         run("We Work Remotely", lambda: connectors.fetch_wwr())
-    if "Gmail (LinkedIn/Indeed alert)" in sources and GMAIL_MODULE_OK:
-        run("Gmail", lambda: gmail_connector.fetch_gmail_job_alerts())
+    gmail_failures = []
+    if "Gmail (LinkedIn/Indeed/Company alert)" in sources and GMAIL_MODULE_OK:
+        try:
+            gmail_jobs, gmail_failures = gmail_connector.fetch_gmail_job_alerts()
+            statuses.append({"source": "Gmail", "status": "ok" if gmail_jobs else "ok_zero_results",
+                              "jobs_retrieved": len(gmail_jobs), "error": None})
+            jobs.extend(gmail_jobs)
+        except Exception as e:
+            errors.append(f"Gmail: {e}")
+            statuses.append({"source": "Gmail", "status": "failed", "jobs_retrieved": 0, "error": str(e)})
 
     if include_ats_flag:
         ats_directory = json.loads(ats_directory_json)
@@ -195,12 +338,13 @@ def load(qs, sources, include_ats_flag, ats_directory_json):
             if status["error"]:
                 errors.append(f"{company} ({status['ats']}): {status['error']}")
 
-    return jobs, errors, statuses
+    return jobs, errors, statuses, gmail_failures
 
 
 if refresh or "jobs" not in st.session_state:
     with st.spinner("Raccolgo e valuto le posizioni..."):
-        jobs, errors, statuses = load(tuple(queries), tuple(sources_enabled), include_ats, json.dumps(CFG.get("ats_directory", {})))
+        jobs, errors, statuses, gmail_parsing_failures = load(tuple(queries), tuple(sources_enabled), include_ats, json.dumps(CFG.get("ats_directory", {})))
+        st.session_state.gmail_parsing_failures = gmail_parsing_failures
         eml_parsing_failures = []
         for uf in uploaded or []:
             try:
@@ -358,6 +502,8 @@ experience_to_verify = [r for r in assessed if "not clearly stated" in (r.get("e
 parsing_failures = [d for d in diagnostics if d["classification"] == "PARSING_FAILURE"]
 parsing_failures += [{"source": r.get("source"), "title": r.get("title"), "company": "",
                        "exclusion_reason": r.get("description")} for r in st.session_state.get("eml_parsing_failures", [])]
+parsing_failures += [{"source": r.get("source"), "title": r.get("title"), "company": "",
+                       "exclusion_reason": r.get("description")} for r in st.session_state.get("gmail_parsing_failures", [])]
 
 sections = {
     f"🆕 New Today ({count(lambda r: r.get('date_first_seen') == today)})": lambda: [r for r in assessed if r.get("date_first_seen") == today],

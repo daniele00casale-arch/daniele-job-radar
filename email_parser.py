@@ -26,6 +26,22 @@ INDEED_JOB_LINK_RX = re.compile(r"indeed\.com/(rc/clk|viewjob|pagead)", re.I)
 TRACKING_PARAMS = {"trk", "trkEmail", "refId", "midToken", "midSig", "trackingId", "eid", "toolbar_src",
                     "utm_source", "utm_medium", "utm_campaign", "from", "recommended"}
 
+# "Company" job-alert emails (spec: a third Gmail label, JOB-ALERTS/Company,
+# for job-board/ATS/company-careers-page alert emails that aren't LinkedIn
+# or Indeed - e.g. a Greenhouse/Lever "new jobs matching your search" digest,
+# or a company's own careers-page subscription). There is no single fixed
+# template to match against like the two providers above, so this uses a
+# generic heuristic instead: any link that isn't obviously navigation/legal/
+# social, with distinct-enough anchor text, counted as one candidate job
+# link per unique URL. Still never guesses when it can't tell jobs apart -
+# same <2-distinct-links-found fallback rule as the other two providers.
+COMPANY_GENERIC_LINK_EXCLUDE_RX = re.compile(
+    r"(unsubscribe|preferences|privacy|terms|cookie|manage.?(alert|subscription)|"
+    r"linkedin\.com/(company|in|school)/|twitter\.com|x\.com|facebook\.com|instagram\.com|"
+    r"youtube\.com|mailto:|\.png$|\.jpg$|\.gif$)",
+    re.I,
+)
+
 
 def detect_provider(msg, text):
     frm = (msg.get("From") or "").lower()
@@ -102,23 +118,30 @@ def _split_title_company(anchor_text, context_text):
     return title, company, location
 
 
-def parse_eml_bytes(raw, source="Email alert"):
+def parse_eml_bytes(raw, source="Email alert", forced_provider=None):
     """Returns a LIST of job dicts (possibly empty), one per vacancy found -
     never a single record standing in for the whole email. On failure to
     split, returns a single-item list carrying the honest fallback message
     in `description` and `parsing_failed=True` so app.py can route it to
-    the Parsing Failures section instead of pretending it's a real job."""
+    the Parsing Failures section instead of pretending it's a real job.
+
+    `forced_provider` lets a caller that already knows where the message
+    came from (e.g. gmail_connector.py, which read it out of a specific
+    Gmail label) skip the From-header sniffing below and go straight to
+    the right parsing rules - used for "Company" (spec's third label),
+    which sniffing can't reliably detect since it covers many different
+    senders."""
     msg = email.message_from_bytes(raw)
     body_html, body_text = _extract_body(msg)
     soup = BeautifulSoup(body_html or f"<pre>{body_text}</pre>", "html.parser")
     full_text = soup.get_text(" ", strip=True)
-    provider = detect_provider(msg, full_text + " " + (msg.get("Subject") or ""))
+    provider = forced_provider or detect_provider(msg, full_text + " " + (msg.get("Subject") or ""))
     message_id = msg.get("Message-ID", msg.get("Date", ""))
     published_at = msg.get("Date", "")
 
-    link_rx = LINKEDIN_JOB_LINK_RX if provider == "LinkedIn" else INDEED_JOB_LINK_RX if provider == "Indeed" else None
     jobs = []
-    if link_rx:
+    if provider in ("LinkedIn", "Indeed"):
+        link_rx = LINKEDIN_JOB_LINK_RX if provider == "LinkedIn" else INDEED_JOB_LINK_RX
         seen_urls = set()
         for a in soup.find_all("a", href=True):
             href = a["href"]
@@ -140,6 +163,33 @@ def parse_eml_bytes(raw, source="Email alert"):
                 "salary": "", "url": clean_url, "published_at": published_at,
                 "worldwide": bool(re.search(r"worldwide|anywhere in the world|work from anywhere|remote", context, re.I)),
             })
+    elif provider == "Company":
+        # Generic heuristic: every distinct http(s) link whose anchor text
+        # looks like a job title (not "unsubscribe", not a social icon, at
+        # least a few characters of real text) is a job-link candidate.
+        seen_urls = set()
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if not href.startswith("http"):
+                continue
+            if COMPANY_GENERIC_LINK_EXCLUDE_RX.search(href):
+                continue
+            anchor_text = a.get_text(" ", strip=True)
+            if not anchor_text or len(anchor_text) < 4 or len(anchor_text) > 140:
+                continue
+            clean_url = strip_tracking_params(href)
+            if clean_url in seen_urls:
+                continue
+            seen_urls.add(clean_url)
+            _, context = _nearby_text(a)
+            title, company, location = _split_title_company(anchor_text, context)
+            jobs.append({
+                "source": "Company", "source_id": f"{message_id}:{clean_url}", "gmail_message_id": message_id,
+                "title": title, "company": company or "n/d (verificare annuncio originale)",
+                "location": location, "description": context, "employment_type": "", "seniority": "",
+                "salary": "", "url": clean_url, "published_at": published_at,
+                "worldwide": bool(re.search(r"worldwide|anywhere in the world|work from anywhere|remote", context, re.I)),
+            })
 
     if len(jobs) >= 2:
         return jobs
@@ -147,7 +197,7 @@ def parse_eml_bytes(raw, source="Email alert"):
     # Fewer than 2 distinguishable per-job links -> don't guess. Return the
     # spec's exact honest fallback message as a non-job diagnostic record.
     fallback_text = (f"Unable to extract individual jobs from this {provider} alert format."
-                      if provider in ("LinkedIn", "Indeed") else
+                      if provider in ("LinkedIn", "Indeed", "Company") else
                       "Unable to extract individual jobs from this alert format (unrecognised sender).")
     return [{
         "source": source, "source_id": message_id, "gmail_message_id": message_id, "parsing_failed": True,
