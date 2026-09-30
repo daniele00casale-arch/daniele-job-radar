@@ -164,26 +164,19 @@ def record_connector_status(source, status, jobs_retrieved=0, connection_error=N
     `status` is one of: ok / zero_results / failed / not_configured /
     unsupported / rate_limited - callers decide which, this just persists."""
     now = datetime.now(timezone.utc).isoformat()
+    last_ok = now if status == "ok" else None
     with closing(sqlite3.connect(path, timeout=15)) as conn:
-        cur = conn.execute("SELECT source FROM connector_status WHERE source=?", (source,))
-        exists = cur.fetchone() is not None
-        last_successful_clause = ", last_successful=?" if status == "ok" else ""
-        params = [now, int(configured), int(enabled), jobs_retrieved, connection_error, parsing_error, status]
-        if status == "ok":
-            params.append(now)
-        if exists:
-            conn.execute(
-                f"UPDATE connector_status SET last_attempted=?, configured=?, enabled=?, jobs_retrieved=?, "
-                f"connection_error=?, parsing_error=?, status=?{last_successful_clause} WHERE source=?",
-                params + [source],
-            )
-        else:
-            conn.execute(
-                "INSERT INTO connector_status (source, last_attempted, configured, enabled, jobs_retrieved, "
-                "connection_error, parsing_error, status, last_successful) VALUES (?,?,?,?,?,?,?,?,?)",
-                [source, now, int(configured), int(enabled), jobs_retrieved, connection_error, parsing_error, status,
-                 now if status == "ok" else None],
-            )
+        # Atomic UPSERT: the old SELECT-then-INSERT/UPDATE raced when Streamlit re-ran the script
+        # (same source written twice) and crashed with "UNIQUE constraint failed: connector_status.source".
+        conn.execute(
+            "INSERT INTO connector_status (source, last_attempted, configured, enabled, jobs_retrieved, "
+            "connection_error, parsing_error, status, last_successful) VALUES (?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(source) DO UPDATE SET last_attempted=excluded.last_attempted, "
+            "configured=excluded.configured, enabled=excluded.enabled, jobs_retrieved=excluded.jobs_retrieved, "
+            "connection_error=excluded.connection_error, parsing_error=excluded.parsing_error, "
+            "status=excluded.status, last_successful=COALESCE(excluded.last_successful, connector_status.last_successful)",
+            [source, now, int(configured), int(enabled), jobs_retrieved, connection_error, parsing_error, status, last_ok],
+        )
         conn.commit()
 
 
