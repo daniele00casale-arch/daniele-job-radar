@@ -1,0 +1,799 @@
+"""
+Priority classification (Diamond/Gold/Silver/Strategic Internship/
+High-Value Part-Time), compatibility scoring, and confidence labelling for
+Daniele Job Radar.
+
+Design principle followed throughout (per the project's own rules):
+hard requirements are NEVER overridden by a high compatibility score, and
+nothing is ever invented - a missing fact is always labelled as missing
+("Salary not disclosed", "Remote arrangement requires confirmation",
+"Experience requirement not clearly stated") rather than guessed.
+
+Single entry point used by app.py: `assess(job, cfg)` -> dict with keys
+title/priority/score/band/confidence/reasons/penalties/mandatory_found/
+preferred_found/experience_required/remote_scope/country_restrictions/
+compensation/compensation_guaranteed/contract_type/filtered_out_reason.
+"""
+import re
+
+# --------------------------------------------------------------------------
+# text helpers
+# --------------------------------------------------------------------------
+def to_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple, set)):
+        return ", ".join(to_text(v) for v in value if v)
+    return str(value)
+
+
+def norm(s):
+    return re.sub(r"[^a-z0-9+%]+", " ", to_text(s).lower()).strip()
+
+
+def job_text(job, fields=("title", "description", "seniority", "location", "employment_type", "salary")):
+    return norm(" ".join(to_text(job.get(f, "")) for f in fields))
+
+
+def raw_job_text(job, fields=("title", "description", "seniority", "location", "employment_type", "salary")):
+    """Lightly-cleaned (lowercased, whitespace-collapsed) text that KEEPS
+    currency symbols, digits grouping (commas/dots) and punctuation intact.
+    `job_text`/`norm` strip all of that for keyword matching, which is
+    exactly wrong for money/hours regexes - this is what those use."""
+    blob = " ".join(to_text(job.get(f, "")) for f in fields)
+    return re.sub(r"\s+", " ", blob.lower()).strip()
+
+
+# --------------------------------------------------------------------------
+# payment / hard exclusions (never overridden by score, for any tier)
+# --------------------------------------------------------------------------
+BAD_PAYMENT_TERMS = ["unpaid", "volunteer", "equity only", "equity-only", "100% equity",
+                      "commission only", "commission-only", "bounty only", "token only", "token-only", "no salary"]
+INTERNSHIP_TERMS = ["intern", "internship", "stage", "tirocinio", "apprenticeship", "co-op"]
+
+
+def payment_check(text):
+    words = set(text.split())
+    hit = next((x for x in BAD_PAYMENT_TERMS if x in text), None)
+    if hit:
+        return False, f"esclusa: compenso non ammesso ({hit})"
+    return True, ""
+
+
+_INTERN_RX = re.compile(r"\b(intern|interns|internship|internships|stage|stagista|stagisti|tirocinio|tirocinante|"
+                       r"apprenticeship|working student|werkstudent)\b")
+_STAGE_FALSE_POSITIVES = re.compile(r"\b(early|late|growth|seed|pre seed|mid|next|later|series [a-d]|startup|scale up|"
+                                    r"final|different|various|multiple|each|every|this|that|the)\s+stages?\b|\bstages?\s+of\b")
+
+
+def is_internship(text, job=None):
+    """Whole-word check. The old version used `x in text`, so "intern" matched
+    "international"/"internal" and "stage" matched "early-stage startup":
+    ordinary full-time jobs were being routed to the internship path and
+    dropped. Title/type/seniority decide; the description only counts when it
+    literally says internship/tirocinio."""
+    if job is not None:
+        head = norm(" ".join(to_text(job.get(f, "")) for f in ("title", "employment_type", "seniority")))
+        head = _STAGE_FALSE_POSITIVES.sub(" ", head)
+        if _INTERN_RX.search(head):
+            return True
+        body = _STAGE_FALSE_POSITIVES.sub(" ", text)
+        return bool(re.search(r"\b(internship|tirocinio|stagista|tirocinante)\b", body))
+    text = _STAGE_FALSE_POSITIVES.sub(" ", text)
+    return bool(_INTERN_RX.search(text))
+
+
+# --------------------------------------------------------------------------
+# seniority-by-TITLE hard exclusion (spec section 12) - separate from the
+# years-of-experience check above. A title like "Senior Product Manager"
+# or "Head of Growth" must be excluded even when the description never
+# states a number of years at all (exp is None -> the years-based check
+# alone treats that as "unclear", which is correct for missing experience
+# text but wrong for an explicit seniority WORD in the title itself). This
+# was a real gap found on live data: senior/director postings were slipping
+# through as "experience not clearly stated" instead of being excluded.
+# --------------------------------------------------------------------------
+SENIOR_TITLE_RX = re.compile(
+    r"\b(senior|sr\.?|lead|principal|staff|head of|head,|head\b(?!s)|director|vp\b|v\.p\.|"
+    r"vice president|chief\b|c-level|managing director|executive director)\b",
+    re.I,
+)
+# A few phrases that legitimately use one of the words above WITHOUT being
+# a senior role, so they're excluded from the exclusion (kept intentionally
+# short - anything not covered here still correctly requires manual review
+# via the "Filtered Out with Reasons" section, never silently guessed).
+SENIOR_TITLE_SAFE_PHRASES = ["team lead of interns", "junior lead generation", "lead generation"]
+
+
+def title_seniority_exclusion(title_text):
+    """Returns (excluded: bool, matched_term: str|None). Checked against
+    the job TITLE only (not the full description), to avoid false
+    positives from unrelated mentions like "reports to the Head of
+    Product" inside a junior role's own description."""
+    norm_title = (title_text or "").lower()
+    if any(safe in norm_title for safe in SENIOR_TITLE_SAFE_PHRASES):
+        return False, None
+    m = SENIOR_TITLE_RX.search(norm_title)
+    if m:
+        return True, m.group(0)
+    return False, None
+
+
+# --------------------------------------------------------------------------
+# TITLE GATE (new): the job TITLE must look like one of Daniele's target
+# families, and must not be an obviously different function (sales, support,
+# engineering...). Before, role matching ran on title + the first 800 chars of
+# the description with plain substring tests, so "cro" matched "across",
+# "crm" matched "maintain records in the CRM" and a Renewals/Sales role
+# passed as a "role match".
+# --------------------------------------------------------------------------
+DEFAULT_TITLE_INCLUDE = [
+    "product manager", "product management", "product owner", "product operations", "product ops",
+    "product marketing", "product analyst", "product specialist", "product lead", "technical product",
+    "ai product", "ai builder", "ai business", "digital product", "digital transformation",
+    "business analyst", "business analysis", "business development analyst", "innovation",
+    "marketing operations", "marketing ops", "customer insights", "consumer insights", "crm",
+    "retail technology", "digital commerce", "e commerce", "ecommerce", "process improvement",
+    "commercial analyst", "category manager", "growth", "conversion", "cro specialist", "program manager",
+    "project manager", "strategy", "operations analyst", "data analyst", "insights analyst",
+    "junior product", "associate product", "product designer", "ux researcher",
+]
+DEFAULT_TITLE_EXCLUDE = [
+    "sales", "account executive", "account manager", "account director", "sdr", "bdr", "adr", "sales development",
+    "business development representative", "renewal", "renewals", "customer success", "customer support",
+    "support engineer", "solutions engineer", "sales engineer", "recruiter", "talent acquisition", "sourcer",
+    "software engineer", "backend", "back end", "frontend", "front end", "full stack", "fullstack", "developer",
+    "devops", "sre", "site reliability", "data engineer", "machine learning engineer", "ml engineer",
+    "security engineer", "qa engineer", "sdet", "data scientist", "researcher scientist", "architect",
+    "accountant", "accounting", "payroll", "legal counsel", "paralegal", "compliance", "nurse", "driver",
+    "warehouse", "technician", "electrician", "teacher", "lawyer", "copywriter", "content writer", "seo specialist",
+    "field marketing", "partner manager", "channel", "territory", "collections", "underwriter", "actuar",
+]
+
+
+def title_gate(title, cfg):
+    """Returns (ok: bool, reason: str). Whole-word matching on the normalised title."""
+    gate = (cfg or {}).get("title_gate", {}) or {}
+    include = gate.get("include") or DEFAULT_TITLE_INCLUDE
+    exclude = gate.get("exclude") or DEFAULT_TITLE_EXCLUDE
+    t = " " + norm(title) + " "
+    bad = next((x for x in exclude if " " + norm(x) + " " in t), None)
+    if bad:
+        return False, f"esclusa: funzione non target nel titolo ('{bad}')"
+    good = next((x for x in include if " " + norm(x) + " " in t), None)
+    if not good:
+        return False, "esclusa: il titolo non appartiene alle famiglie di ruolo target"
+    return True, ""
+
+
+# --------------------------------------------------------------------------
+# GEO GATE (new): hard-exclude roles that are only open to regions where
+# Daniele cannot work (US/Canada/LATAM/APAC only...) unless the text ALSO says
+# Europe / Italy / worldwide / Switzerland. Uses the structured location
+# field first, then explicit "must be based in / authorised to work in" text.
+# Before this, only "us only"/"canada only"-style literals excluded, and only
+# for the Diamond tier.
+# --------------------------------------------------------------------------
+GEO_BLOCKED = ["united states", "usa", "us", "u s", "canada", "north america", "latam", "latin america", "apac",
+               "asia", "india", "australia", "new zealand", "brazil", "mexico", "singapore", "philippines",
+               "united kingdom", "uk", "middle east", "africa"]
+GEO_ALLOWED = ["italy", "italia", "europe", "european", "eu", "emea", "worldwide", "anywhere", "global", "globally",
+               "switzerland", "svizzera", "schweiz", "suisse", "ticino", "milan", "milano", "lugano", "chiasso",
+               "mendrisio", "bellinzona", "lombardia", "lombardy", "remote italy", "work from anywhere"]
+GEO_TEXT_RX = re.compile(
+    r"(must (?:be|reside|live) (?:based |located )?in the (?:us|u s|usa|united states|uk|united kingdom|canada)|"
+    r"(?:us|usa|united states|canada|uk) (?:residents?|citizens?|based) only|"
+    r"authori[sz]ed to work in the (?:us|u s|usa|united states|uk|canada)|"
+    r"based in the (?:us|u s|usa|united states|canada)(?: or canada)?|"
+    r"residents of the united states|us or canada|united states or canada|canada or the united states|"
+    r"right to work in the (?:us|uk|united states|canada))")
+
+
+def _has_word(blob, words):
+    b = " " + blob + " "
+    return [w for w in words if " " + w + " " in b]
+
+
+def geo_exclusion(job, text):
+    """Returns exclusion reason or None. Never invents: only fires on explicit evidence."""
+    loc = norm(to_text(job.get("location", "")))
+    if loc:
+        blocked = _has_word(loc, GEO_BLOCKED)
+        allowed = _has_word(loc, GEO_ALLOWED)
+        if blocked and not allowed:
+            return f"esclusa: aperta solo a regioni non compatibili (location: {blocked[0]})"
+    m = GEO_TEXT_RX.search(text)
+    if m and not _has_word(text[:3000], ["worldwide", "anywhere", "europe", "emea", "italy", "italia", "eu"]):
+        return f"esclusa: restrizione geografica esplicita nel testo ('{m.group(0)}')"
+    if m and loc and not _has_word(loc, GEO_ALLOWED):
+        return f"esclusa: restrizione geografica esplicita e location non compatibile ('{m.group(0)}')"
+    return None
+
+
+# --------------------------------------------------------------------------
+# experience
+# --------------------------------------------------------------------------
+# lower bound of "2-3 years", "3+ years", "minimum 2 years"... but only when "experience"
+# (or an equivalent) is nearby, so "founded 20 years ago" / "5 years warranty" don't count
+EXPERIENCE_PATTERNS = [r"(\d+)(?:\s*[-–]\s*\d+)?\s*\+?\s*years?(?=[^.]{0,40}?(?:experience|esperienza|exp\b|background|track record|in a similar|in a related))",
+                       r"(?:experience|esperienza)[^.]{0,30}?(\d+)(?:\s*[-–]\s*\d+)?\s*\+?\s*years?",
+                       r"(?:minimum|at least|min\.?)\s+(\d+)\s+years?"]
+NO_EXPERIENCE_RX = re.compile(r"no experience|recent graduate|new graduate|fresh graduate|0\s*[-–]\s*1\s*years?")
+PREFERRED_QUALIFIERS = ["preferred", "desirable", "nice to have", "a plus", "bonus if", "ideally"]
+
+
+def parse_experience(text):
+    """Return (min_years:int|None, is_only_preferred:bool). is_only_preferred
+    is True when the only experience figure found sits within ~40 chars of
+    a "preferred/desirable/nice to have" qualifier, meaning it is NOT a
+    mandatory requirement - relevant for the Diamond/Gold "2 years allowed
+    only if preferred" rule."""
+    if NO_EXPERIENCE_RX.search(text):
+        return 0, False
+    vals = []
+    for p in EXPERIENCE_PATTERNS:
+        for m in re.finditer(p, text):
+            start = max(0, m.start() - 40)
+            end = min(len(text), m.end() + 20)
+            window = text[start:end]
+            preferred = any(q in window for q in PREFERRED_QUALIFIERS)
+            vals.append((int(m.group(1)), preferred))
+    if not vals:
+        return None, False
+    vals.sort(key=lambda v: v[0])
+    min_years, preferred = vals[0]
+    return min_years, preferred
+
+
+def experience_requirement_text(exp, preferred):
+    if exp is None:
+        return "Experience requirement not clearly stated"
+    if preferred:
+        return f"~{exp} anni (indicati come preferenziali, non obbligatori)"
+    return f"~{exp} anni richiesti"
+
+
+def experience_ok_for_tier(exp, preferred, max_years, max_years_if_preferred):
+    if exp is None:
+        return True  # unclear -> not a hard exclusion, but flagged via confidence elsewhere
+    if exp <= max_years:
+        return True
+    if preferred and exp <= max_years_if_preferred:
+        return True
+    return False
+
+
+# --------------------------------------------------------------------------
+# worldwide / location scope
+# --------------------------------------------------------------------------
+def diamond_worldwide(text, cfg):
+    evidence = [e.strip('"') for e in cfg["diamond"]["worldwide_evidence"]]
+    exclusions = cfg["diamond"]["worldwide_exclusions"]
+    if any(x in text for x in exclusions):
+        return False
+    return any(x in text for x in evidence)
+
+
+def gold_location_ok(job_location_text, cfg, job=None):
+    """Whole-word match on location field + title, plus explicit 'based/located/office in <place>'
+    phrases in the description. A stray 'we also have offices in Milan' no longer counts."""
+    locs = cfg["gold"]["preferred_locations"]
+    if job is not None:
+        head = " " + norm(to_text(job.get("location", "")) + " " + to_text(job.get("title", ""))) + " "
+        if any(" " + norm(l) + " " in head for l in locs):
+            return True
+        for l in locs:
+            if re.search(r"(?:based|located|office|offices|sede|ufficio|hybrid|onsite|on site)\s+(?:in|at|a|presso)\s+" + re.escape(norm(l)) + r"\b", job_location_text):
+                return True
+        return False
+    padded = " " + job_location_text + " "
+    return any(" " + norm(loc) + " " in padded for loc in locs)
+
+
+_REMOTE_EU_RX = re.compile(r"\b(remote|remoto|smart working|work from home|distributed|anywhere)\b[^.]{0,60}\b(italy|italia|europe|european|eu|emea)\b|"
+                          r"\b(italy|italia|europe|european|eu|emea)\b[^.]{0,40}\b(remote|remoto|smart working|based)\b")
+
+
+def silver_remote_scope(text, cfg, job=None):
+    """Returns 'italy_or_europe', 'other', or None (unclear). Requires 'remote' near Italy/Europe
+    (or Italy/Europe in the structured location field) instead of the bare word 'italy' anywhere."""
+    if any(x in text for x in ["excluding italy", "except italy", "not italy"]):
+        return "other"
+    loc = norm(to_text(job.get("location", ""))) if job is not None else ""
+    if loc and _has_word(loc, ["italy", "italia", "europe", "european", "eu", "emea", "worldwide", "anywhere", "global"]):
+        return "italy_or_europe"
+    if _REMOTE_EU_RX.search(text):
+        return "italy_or_europe"
+    return None
+
+
+OFFICE_DAYS_RX = re.compile(r"(\d)\s*(?:days?|giorni)\s*(?:a|per|/)\s*week", re.I)
+
+
+# --------------------------------------------------------------------------
+# compensation - never invented, never annualised from an unguaranteed rate
+# --------------------------------------------------------------------------
+SALARY_RANGE_RX = re.compile(
+    r"(?P<cur>USD|EUR|CHF|GBP|\$|€|£|Fr\.?)\s?(?P<min>\d[\d,\.]{2,})\s?(?:[-–to]{1,3}\s?(?P<cur2>USD|EUR|CHF|GBP|\$|€|£|Fr\.?)?\s?(?P<max>\d[\d,\.]{2,}))?"
+    r"\s?(?:/|per)?\s?(?P<period>year|yr|annum|month|hour|hr)?",
+    re.I,
+)
+SALARY_SUFFIX_RX = re.compile(
+    r"(?P<min>\d[\d,\.]{2,})\s?(?:[-–]\s?(?P<max>\d[\d,\.]{2,}))?\s?(?P<cur>USD|EUR|CHF|GBP)\b(?:\s?(?:/|per)?\s?(?P<period>year|yr|annum|month|hour|hr))?",
+    re.I,
+)  # matches the connectors' own structured-field format, e.g. "40000-55000 EUR"
+HOURLY_RATE_RX = re.compile(r"(?P<cur>USD|EUR|CHF|GBP|\$|€|£)\s?(?P<rate>\d[\d,\.]{0,6})\s?(?:/|per)\s?(?:hour|hr)", re.I)
+GUARANTEED_HOURS_RX = re.compile(r"(\d{1,3})\s*(?:\+)?\s*hours?\s*(?:per|/|a)\s*week|(\d{1,3})\s*%\s*(?:workload|fte|time)", re.I)
+
+CURRENCY_MAP = {"$": "USD", "€": "EUR", "£": "GBP", "fr": "CHF", "fr.": "CHF"}
+
+
+def _clean_number(s):
+    """Normalise a captured number like "40,000", "40.000" (EU thousands
+    separator) or "45000.50" into a float. A dot is treated as a decimal
+    point only when it's followed by exactly 1-2 digits at the very end;
+    otherwise (EU-style thousands grouping) it's stripped like a comma."""
+    s = s.strip()
+    s = s.replace(",", "")
+    if re.search(r"\.\d{1,2}$", s):
+        return float(s)
+    return float(s.replace(".", ""))
+
+
+def parse_compensation(text):
+    """Best-effort salary extraction. Returns a dict:
+        {found: bool, min, max, currency, period, annualised_ok: bool,
+         guaranteed: bool, display: str}
+    NEVER invents a number. A bare hourly rate with no stated weekly hours
+    or workload % is reported but NOT annualised (guaranteed=False,
+    display keeps the hourly rate as-is) per the project's explicit rule
+    against annualising "up to" rates without guaranteed hours."""
+    m = SALARY_RANGE_RX.search(text)
+    if not m or not m.group("min"):
+        m = SALARY_SUFFIX_RX.search(text)
+    if not m or not m.group("min"):
+        # maybe a bare hourly rate
+        hm = HOURLY_RATE_RX.search(text)
+        if hm:
+            cur = CURRENCY_MAP.get(hm.group("cur").lower(), hm.group("cur").upper())
+            rate = hm.group("rate")
+            guaranteed = bool(GUARANTEED_HOURS_RX.search(text))
+            return {"found": True, "min": None, "max": None, "currency": cur, "period": "hour",
+                    "guaranteed": guaranteed, "display": f"{rate} {cur}/ora" + ("" if guaranteed else " (ore non garantite - non annualizzato)")}
+        return {"found": False, "min": None, "max": None, "currency": None, "period": None,
+                "guaranteed": False, "display": "Salary not disclosed"}
+
+    groups = m.groupdict()
+    cur_raw = groups.get("cur") or groups.get("cur2") or "EUR"
+    currency = CURRENCY_MAP.get(cur_raw.lower(), cur_raw.upper())
+    try:
+        min_v = _clean_number(m.group("min")) if m.group("min") else None
+    except ValueError:
+        min_v = None
+    try:
+        max_v = _clean_number(m.group("max")) if m.group("max") else min_v
+    except ValueError:
+        max_v = min_v
+    period = (m.group("period") or "year").lower()
+    guaranteed = period in ("year", "yr", "annum", "month") or bool(GUARANTEED_HOURS_RX.search(text))
+    display = f"{int(min_v):,}".replace(",", ".") if min_v else "?"
+    if max_v and max_v != min_v:
+        display += f" - {int(max_v):,}".replace(",", ".")
+    display += f" {currency}"
+    if period in ("hour", "hr"):
+        display += "/ora" + ("" if guaranteed else " (ore non garantite - non annualizzato)")
+    return {"found": True, "min": min_v, "max": max_v, "currency": currency, "period": period,
+            "guaranteed": guaranteed, "display": display}
+
+
+def meets_annual_minimum(comp, min_eur):
+    """Rough EUR/CHF/USD/GBP parity approximation - documented as such,
+    never presented as exact FX. Returns True/False/None (unclear)."""
+    if not comp["found"] or comp["min"] is None:
+        return None
+    if comp["period"] not in ("year", "yr", "annum"):
+        return None  # monthly/hourly figures are not compared to an annual threshold here
+    fx = {"EUR": 1.0, "CHF": 1.06, "GBP": 1.15, "USD": 0.90}.get((comp.get("currency") or "EUR").upper(), 1.0)
+    return comp["min"] * fx >= min_eur
+
+
+# --------------------------------------------------------------------------
+# role keyword matching, sector, language, growth, brand
+# --------------------------------------------------------------------------
+def role_match(text, keywords):
+    """Whole-word/phrase matching (old code used substring tests: "cro" hit
+    "across"/"microsoft", "ai" hit "email"/"maintain", "agno" hit "diagnostic")."""
+    padded = " " + text + " "
+    return [k for k in keywords if " " + norm(k) + " " in padded]
+
+
+def tier_role_keywords(cfg, tier):
+    """Union of the tier's own role_keywords with the candidate's
+    target_titles list. The tier lists use broader category phrases
+    ("product management"); target_titles has the exact role names from
+    the candidate's preferred-role-family list ("junior product manager",
+    "product owner", ...). A job titled "Product Manager" should count as
+    a role match for every tier even though that exact phrase isn't
+    repeated in each tier's own keyword list - checking only one list was
+    a real gap that silently dropped obviously-relevant titles."""
+    seen, out = set(), []
+    for k in list(cfg[tier]["role_keywords"]) + list(cfg["profile"]["target_titles"]):
+        nk = norm(k)
+        if nk not in seen:
+            seen.add(nk)
+            out.append(k)
+    return out
+
+
+LANGUAGES_REQUIRED_RX = {
+    "french": re.compile(r"(fluent|native|professional|advanced|working)\s+french|french\s+(fluency|required|native|speaker)", re.I),
+    "german": re.compile(r"(fluent|native|professional|advanced|working)\s+german|german\s+(fluency|required|native|speaker)", re.I),
+}
+
+
+def language_fit(text, profile):
+    """Profile: italian/english/spanish = strong, french = basic only.
+    A role requiring fluent/professional French or German (or any language
+    outside the profile) at a working level is a language gap."""
+    gaps = []
+    if LANGUAGES_REQUIRED_RX["french"].search(text):
+        gaps.append("francese a livello professionale (il profilo ha solo francese base)")
+    if LANGUAGES_REQUIRED_RX["german"].search(text):
+        gaps.append("tedesco richiesto (non nel profilo)")
+    covered = [l for l in ("italian", "english", "spanish") if l in text]
+    return gaps, covered
+
+
+GROWTH_HINTS = ["mentorship", "training programme", "training program", "career development", "learning budget",
+                "structured onboarding", "fast growing", "scale up", "rotational programme", "graduate programme"]
+BRAND_TIER_HINTS = ["y combinator", "unicorn", "fortune 500", "listed company", "publicly traded", "series b", "series c", "series d"]
+
+
+# --------------------------------------------------------------------------
+# main assessment
+# --------------------------------------------------------------------------
+def compatibility_score(text, title, cfg, raw=""):
+    profile = cfg["profile"]
+    weights = cfg["scoring"]
+    reasons = []
+
+    in_title = role_match(title, profile["target_titles"])
+    in_desc = [h for h in role_match(text[:800], profile["target_titles"]) if h not in in_title]
+    title_hits = in_title + in_desc
+    role_score = min(weights["role_weight"], (14 if in_title else 0) + min(6, len(in_desc) * 2))
+    if title_hits:
+        reasons.append(f"ruolo allineato ({', '.join(title_hits[:2])})")
+
+    skill_hits = role_match(text, profile["strengths"])
+    skills_score = min(weights["skills_weight"], round(len(skill_hits) / max(1, len(profile["strengths"])) * weights["skills_weight"] * 2.2))
+    if skill_hits:
+        reasons.append(f"{len(skill_hits)} competenze rilevanti ({', '.join(skill_hits[:4])})")
+
+    exp, preferred = parse_experience(raw or text)
+    entry_terms = ["entry level", "entry-level", "junior", "graduate", "associate", "no experience"]
+    entry_hits = [t for t in entry_terms if t in text]
+    if exp is not None and exp <= 1:
+        seniority_score = weights["seniority_weight"]
+        reasons.append(f"esperienza compatibile (~{exp} anni)")
+    elif exp is None and entry_hits:
+        seniority_score = weights["seniority_weight"]
+        reasons.append("descritta come entry-level/junior")
+    elif exp is not None and exp <= 2 and preferred:
+        seniority_score = round(weights["seniority_weight"] * 0.8)
+        reasons.append("esperienza extra indicata come preferenziale, non obbligatoria")
+    else:
+        seniority_score = round(weights["seniority_weight"] * 0.3) if exp is None else 0
+
+    worldwide = diamond_worldwide(text, cfg)
+    location_score = weights["location_weight"] if worldwide else round(weights["location_weight"] * 0.4)
+    if worldwide:
+        reasons.append("remote worldwide con evidenza esplicita")
+
+    comp = parse_compensation(raw or text)
+    contract_score = weights["contract_compensation_weight"] if comp["found"] else round(weights["contract_compensation_weight"] * 0.4)
+
+    sector_hits = role_match(text, profile["sectors"])
+    sector_score = min(weights["sector_weight"], len(sector_hits) * 2)
+    if sector_hits:
+        reasons.append(f"settore affine ({', '.join(sector_hits[:2])})")
+
+    growth_hits = [h for h in GROWTH_HINTS if h in text]
+    growth_score = min(weights["growth_weight"], len(growth_hits) * 2)
+
+    lang_gaps, lang_covered = language_fit(text, profile["languages_spoken"])
+    if lang_gaps:
+        language_score = 0
+        reasons.append(f"gap linguistico: {lang_gaps[0]}")
+    elif lang_covered:
+        language_score = weights["language_weight"]
+        reasons.append(f"lingue coperte ({', '.join(lang_covered)})")
+    else:
+        language_score = round(weights["language_weight"] * 0.6)
+
+    brand_hits = [h for h in BRAND_TIER_HINTS if h in text]
+    brand_score = min(weights["brand_weight"], len(brand_hits) * 3)
+
+    total = min(100, role_score + skills_score + seniority_score + location_score + contract_score + sector_score + growth_score + language_score + brand_score)
+    return total, reasons, exp, preferred, comp, worldwide
+
+
+def office_days_estimate(raw_text):
+    m = OFFICE_DAYS_RX.search(raw_text)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def score_band(score, cfg):
+    b = cfg["scoring"]["bands"]
+    if score >= b["apply_now"]:
+        return "Apply Now"
+    if score >= b["strong_opportunity"]:
+        return "Strong Opportunity"
+    if score >= b["consider"]:
+        return "Consider"
+    if score >= b["stretch"]:
+        return "Stretch"
+    return "Hidden"
+
+
+def confidence_level(exp_known, remote_known, comp_known):
+    known = sum([exp_known, remote_known, comp_known])
+    if known == 3:
+        return "High"
+    if known == 2:
+        return "Medium"
+    return "Low"
+
+
+def assess(job, cfg, watchlist_companies=None):
+    """Full pipeline for a single job: hard exclusions -> priority tier
+    classification -> compatibility score -> confidence. Returns a rich
+    dict; app.py decides which dashboard section(s) to place it in."""
+    text = job_text(job)
+    raw = raw_job_text(job)
+    title = norm(job.get("title", ""))
+    company = job.get("company") or ""
+    watchlist_companies = watchlist_companies or []
+    is_watchlisted = any(w.lower() in company.lower() for w in watchlist_companies)
+
+    def _tag_watchlist(reason):
+        return f"WATCHLIST MATCH, NOT QUALIFIED - {reason}" if is_watchlisted else reason
+
+    ok, why = payment_check(text)
+    if not ok:
+        return {"filtered_out_reason": _tag_watchlist(why), "priority": None, "title": job.get("title"), "company": company, "is_watchlisted": is_watchlisted}
+
+    senior_excluded, senior_term = title_seniority_exclusion(job.get("title", ""))
+    if senior_excluded:
+        reason = f"esclusa: titolo senior/dirigenziale non junior/entry-level ('{senior_term}' nel titolo)"
+        return {"filtered_out_reason": _tag_watchlist(reason),
+                "priority": None, "title": job.get("title"), "company": company, "is_watchlisted": is_watchlisted}
+
+    gate_ok, gate_why = title_gate(job.get("title", ""), cfg)
+    if not gate_ok:
+        return {"filtered_out_reason": _tag_watchlist(gate_why), "priority": None, "title": job.get("title"),
+                "company": company, "is_watchlisted": is_watchlisted}
+
+    geo_why = geo_exclusion(job, text)
+    if geo_why:
+        return {"filtered_out_reason": _tag_watchlist(geo_why), "priority": None, "title": job.get("title"),
+                "company": company, "is_watchlisted": is_watchlisted}
+
+    internship = is_internship(text, job)
+
+    score, reasons, exp, preferred, comp, worldwide_evidence = compatibility_score(text, title, cfg, raw=raw)
+    band = score_band(score, cfg)
+
+    exp_text = experience_requirement_text(exp, preferred)
+    comp_min_ok_eur = meets_annual_minimum(comp, cfg["diamond"]["min_annual_salary_eur"])
+
+    remote_scope_label = "Genuinely worldwide" if worldwide_evidence else "Remote arrangement requires confirmation"
+    if is_watchlisted and not worldwide_evidence:
+        remote_scope_label = "Remote arrangement requires confirmation (watchlist company - verify per-vacancy, do not assume company-wide policy)"
+
+    country_restrictions = "Nessuna evidenza di restrizione geografica" if worldwide_evidence else "Non determinabile dal testo - verificare l'annuncio originale"
+
+    confidence = confidence_level(exp is not None, worldwide_evidence or (not worldwide_evidence and "must be based in" in text), comp["found"])
+
+    mandatory_found, preferred_found, penalties = [], [], []
+    priority = None
+
+    # ---------------- STRATEGIC INTERNSHIP (only path an internship can take) ----------------
+    if internship:
+        conditions_cfg = cfg["strategic_internship"]["conditions"]
+        met = []
+        if is_watchlisted or any(h in text for h in BRAND_TIER_HINTS):
+            met.append("internationally recognised company")
+        if role_match(text, cfg["diamond"]["role_keywords"] + cfg["gold"]["role_keywords"]):
+            met.append("direct relevance to product/ai/digital/retail technology")
+        if any(h in text for h in ["structured programme", "structured program", "rotational", "graduate programme"]):
+            met.append("structured development programme")
+        if comp["found"]:
+            met.append("clear compensation")
+        if len(text) > 400:
+            met.append("clear responsibilities (detailed description)")
+        if any(h in text for h in GROWTH_HINTS):
+            met.append("strong employability after completion")
+        if gold_location_ok(text, cfg, job) or worldwide_evidence:
+            met.append("canton ticino or highly flexible remote arrangement")
+        if score >= 70:
+            met.append("meaningfully stronger learning value than a generic internship")
+        if len(met) >= cfg["strategic_internship"]["minimum_conditions_met"]:
+            priority = "STRATEGIC_INTERNSHIP"
+            mandatory_found = met
+        else:
+            return {"filtered_out_reason": _tag_watchlist(f"esclusa: stage che non soddisfa i criteri di Strategic Internship ({len(met)}/8 condizioni)"),
+                    "priority": None, "title": job.get("title"), "company": company, "is_watchlisted": is_watchlisted}
+
+    # ---------------- HIGH-VALUE PART-TIME (checked before full-time tiers) ----------------
+    hvpt_hint = re.search(r"(\d{1,2})\s*(?:[-–]\s*(\d{1,2}))?\s*hours?\s*(?:per|/|a)\s*week|(\d{1,3})\s*%\s*(?:workload|fte)", raw)
+    if priority is None and hvpt_hint and role_match(text, cfg["high_value_part_time"]["role_keywords"]):
+        rate_m = HOURLY_RATE_RX.search(raw)
+        hours_stated = bool(hvpt_hint)
+        if not hours_stated:
+            penalties.append("nessun numero di ore garantito indicato -> Supplementary income only")
+        elif rate_m:
+            try:
+                rate_val = float(rate_m.group("rate").replace(",", ""))
+                if rate_val >= cfg["high_value_part_time"]["min_contractor_hourly_rate_eur_usd"]:
+                    priority = "HIGH_VALUE_PART_TIME"
+                    mandatory_found = [f"hours/workload stated", f"hourly rate {rate_val} meets EUR/USD 25 minimum"]
+                else:
+                    penalties.append(f"tariffa oraria {rate_val} sotto la soglia minima di 25 EUR/USD")
+            except ValueError:
+                pass
+        elif hours_stated:
+            priority = "HIGH_VALUE_PART_TIME"
+            mandatory_found = ["hours/workload explicitly stated"]
+
+    # ---------------- DIAMOND / POTENTIAL DIAMOND ----------------
+    # A job that meets every Diamond condition except ONE unverifiable fact
+    # (salary not stated, or worldwide scope not explicit either way) is NOT
+    # silently dropped - it becomes POTENTIAL DIAMOND with the exact missing
+    # fact named, per the project's own rule that a high-fit role should
+    # never disappear just because one field wasn't published.
+    if priority is None and not internship:
+        role_hits = role_match(text, tier_role_keywords(cfg, "diamond"))
+        exp_ok = experience_ok_for_tier(exp, preferred, cfg["diamond"]["max_experience_years"], cfg["diamond"]["max_experience_years_if_preferred"])
+        # "unclear" (candidate for POTENTIAL DIAMOND on remote-scope grounds)
+        # requires the text to at least mention remote/distributed work -
+        # NOT just the absence of an explicit country restriction. Without
+        # this, a purely on-site vacancy (e.g. "office in Lugano", no
+        # remote wording at all) would wrongly become "verify remote scope"
+        # instead of being left to the Gold/Silver checks below, since
+        # target_titles are unioned into every tier's role-keyword list.
+        mentions_remote_at_all = any(x in text for x in ["remote", "distributed", "anywhere", "work from home", "wfh"])
+        worldwide_unclear = (not worldwide_evidence) and mentions_remote_at_all and not any(x in text for x in cfg["diamond"]["worldwide_exclusions"])
+        if role_hits and exp_ok:
+            if worldwide_evidence and comp_min_ok_eur is True:
+                priority = "DIAMOND"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", "genuinely worldwide remote (explicit evidence)",
+                                    f"seniority: {exp_text}", f"compensation: {comp['display']} (>= EUR 40,000)"]
+            elif worldwide_evidence and comp_min_ok_eur is None:
+                priority = "POTENTIAL_DIAMOND"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", "genuinely worldwide remote (explicit evidence)", f"seniority: {exp_text}"]
+                penalties.append("POTENTIAL DIAMOND - Salary to verify (salario non dichiarato)")
+            elif worldwide_unclear and comp_min_ok_eur is True:
+                priority = "POTENTIAL_DIAMOND"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", f"seniority: {exp_text}", f"compensation: {comp['display']} (>= EUR 40,000)"]
+                penalties.append("POTENTIAL DIAMOND - Remote scope to verify (worldwide non confermato né escluso esplicitamente)")
+            elif worldwide_unclear and comp_min_ok_eur is None:
+                priority = "POTENTIAL_DIAMOND"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", f"seniority: {exp_text}"]
+                penalties.append("POTENTIAL DIAMOND - Remote scope to verify AND Salary to verify")
+            else:
+                if not worldwide_evidence:
+                    penalties.append("non Diamond: remote worldwide esplicitamente escluso o non presente")
+                if comp_min_ok_eur is False:
+                    penalties.append(f"non Diamond: compenso sotto EUR 40.000 ({comp['display']})")
+
+    # ---------------- GOLD / POTENTIAL GOLD ----------------
+    if priority is None and not internship:
+        role_hits = role_match(text, tier_role_keywords(cfg, "gold"))
+        location_ok = gold_location_ok(text, cfg, job)
+        exp_ok = experience_ok_for_tier(exp, preferred, cfg["gold"]["max_experience_years"], cfg["gold"]["max_experience_years_if_preferred"])
+        if role_hits and location_ok and exp_ok:
+            days = office_days_estimate(raw)
+            if days is not None:
+                if days <= 2:
+                    preferred_found.append(f"~{days} giorni/settimana in ufficio (stima) - ottimo")
+                elif days == 3:
+                    preferred_found.append(f"~{days} giorni/settimana in ufficio (stima) - accettabile")
+                else:
+                    penalties.append(f"~{days} giorni/settimana in ufficio (stima) - pesa negativamente")
+            if comp["found"]:
+                priority = "GOLD"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", "location: Ticino/Milano area", f"seniority: {exp_text}", f"compensation: {comp['display']}"]
+            else:
+                priority = "POTENTIAL_GOLD"
+                mandatory_found = [f"role: {', '.join(role_hits[:3])}", "location: Ticino/Milano area", f"seniority: {exp_text}"]
+                penalties.append("POTENTIAL GOLD - Salary not disclosed")
+        elif role_hits and exp_ok and not location_ok:
+            penalties.append("non Gold: location fuori dall'area Ticino/Milano")
+
+    # ---------------- SILVER / POTENTIAL SILVER ----------------
+    if priority is None and not internship:
+        role_hits = role_match(text, tier_role_keywords(cfg, "silver"))
+        remote_scope = silver_remote_scope(text, cfg, job)
+        exp_ok = experience_ok_for_tier(exp, False, cfg["silver"]["max_experience_years"], cfg["silver"]["max_experience_years"])
+        if role_hits and remote_scope == "italy_or_europe" and exp_ok:
+            if comp["found"]:
+                if comp_min_ok_eur:
+                    priority = "SILVER"
+                    mandatory_found = [f"role: {', '.join(role_hits[:3])}", "remote scope: Italy/Europe (Italy eligible)",
+                                        f"seniority: {exp_text}", f"compensation: {comp['display']}"]
+                else:
+                    penalties.append(f"non Silver: compenso sotto EUR 40.000 ({comp['display']})")
+            else:
+                if score >= cfg["silver"]["min_compatibility_if_salary_missing"]:
+                    priority = "POTENTIAL_SILVER"
+                    mandatory_found = [f"role: {', '.join(role_hits[:3])}", "remote scope: Italy/Europe (Italy eligible)",
+                                        f"seniority: {exp_text}", "compensation unverified but compatibility >= 90%"]
+                    penalties.append("POTENTIAL SILVER - Salary not disclosed, mantenuta per compatibilità >= 90%")
+                else:
+                    penalties.append(f"non Silver: Salary not disclosed e compatibilità {score}% < 90% richiesto senza stipendio")
+
+    if priority is None:
+        reason = "nessun livello di priorità soddisfa tutte le condizioni obbligatorie"
+        if internship:
+            reason = "stage non qualificato come Strategic Internship"
+        if is_watchlisted:
+            reason = "WATCHLIST MATCH, NOT QUALIFIED - " + reason
+        return {"filtered_out_reason": reason, "priority": None, "title": job.get("title"), "company": company,
+                "score": score, "penalties": penalties, "is_watchlisted": is_watchlisted,
+                "confidence": confidence, "exp": exp, "worldwide_evidence": worldwide_evidence, "comp_found": comp["found"]}
+
+    return {
+        "title": job.get("title"), "company": company, "source": job.get("source"), "url": job.get("url"),
+        "published_at": job.get("published_at"), "priority": priority, "score": score, "band": band,
+        "confidence": confidence, "reasons": reasons, "penalties": penalties,
+        "mandatory_found": mandatory_found, "preferred_found": preferred_found,
+        "experience_required": exp_text, "remote_scope": remote_scope_label,
+        "country_restrictions": country_restrictions, "compensation": comp["display"],
+        "compensation_guaranteed": comp["guaranteed"], "contract_type": job.get("employment_type") or "n/d",
+        "is_watchlisted": is_watchlisted, "filtered_out_reason": None,
+    }
+
+
+# --------------------------------------------------------------------------
+# Diagnostic report (spec section 28) - per-job breakdown of exactly which
+# fields were received/missing and which hard filters passed/failed, so the
+# "the app finds jobs but classifies very few" complaint is answerable by
+# looking at data, not by guessing.
+# --------------------------------------------------------------------------
+EXPECTED_FIELDS = ["title", "company", "location", "description", "employment_type", "seniority", "salary", "url", "published_at", "source"]
+
+REJECTION_TAXONOMY = [
+    ("seniority mismatch", lambda r: r.get("exp") is not None and r["exp"] > 2),
+    ("salary below threshold", lambda r: r.get("comp_found") and "sotto EUR" in " ".join(r.get("penalties", []))),
+    ("salary missing", lambda r: not r.get("comp_found")),
+    ("remote scope unclear", lambda r: r.get("worldwide_evidence") is False),
+    ("role-family mismatch", lambda r: "nessun livello di priorità" in (r.get("filtered_out_reason") or "") and not r.get("exp")),
+    ("unpaid", lambda r: "compenso non ammesso" in (r.get("filtered_out_reason") or "")),
+    ("duplicate", lambda r: False),  # deduplication happens in app.py before assess(), flagged separately there
+]
+
+
+def diagnose(job, result):
+    """Build one diagnostic row for the Diagnostic Report / Parsing Failures
+    dashboard sections. `result` is the dict already returned by assess()."""
+    fields_received = [f for f in EXPECTED_FIELDS if to_text(job.get(f)).strip()]
+    fields_missing = [f for f in EXPECTED_FIELDS if f not in fields_received]
+    hard_filters_failed = []
+    if result.get("filtered_out_reason") and "compenso non ammesso" in result["filtered_out_reason"]:
+        hard_filters_failed.append("payment type")
+    if result.get("penalties"):
+        hard_filters_failed.extend([p for p in result["penalties"] if p.startswith("non ")])
+    rejection_tags = [tag for tag, cond in REJECTION_TAXONOMY if cond(result)] if result.get("priority") is None else []
+    return {
+        "source": job.get("source"), "title": job.get("title"), "company": job.get("company"),
+        "fields_received": fields_received, "fields_missing": fields_missing,
+        "score_before_hard_filters": result.get("score"),
+        "hard_filters_passed": result.get("priority") is not None,
+        "hard_filters_failed": hard_filters_failed or (["none - see priority/penalties"] if result.get("priority") else []),
+        "classification": result.get("priority") or "FILTERED_OUT",
+        "exclusion_reason": result.get("filtered_out_reason"),
+        "confidence": result.get("confidence"),
+        "rejection_tags": rejection_tags,
+    }
