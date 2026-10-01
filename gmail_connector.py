@@ -93,44 +93,68 @@ def _get_service():
     return build("gmail", "v1", credentials=creds)
 
 
-def _find_label_id(service, label_name):
+import re
+
+
+def _norm_label(name):
+    """'JOB-ALERTS/LinkedIn', 'JOB-ALERTS-LinkedIn', 'job alerts linkedin' -> 'jobalertslinkedin'."""
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def _find_label_id(service, label_name, _cache={}):
+    """Match the configured label tolerantly: case-insensitive and ignoring '/', '-', '_' and spaces.
+    (The default config expects nested labels like 'JOB-ALERTS/LinkedIn', but labels created by hand are
+    often flat, like 'JOB-ALERTS-LinkedIn'. The old exact match silently found nothing -> 0 jobs.)"""
     labels = service.users().labels().list(userId="me").execute().get("labels", [])
+    _cache["names"] = [l["name"] for l in labels]
+    target = _norm_label(label_name)
     for l in labels:
         if l["name"].lower() == label_name.lower():
+            return l["id"]
+    for l in labels:
+        if _norm_label(l["name"]) == target:
             return l["id"]
     return None
 
 
-def fetch_gmail_job_alerts(max_results=25):
-    """Fetch recent LinkedIn / Indeed / Company job-alert emails from
-    their three dedicated labels, skip any message already processed
-    (tracked in SQLite, not via Gmail labels - the read-only scope can't
-    apply labels), and parse each unprocessed message into its
-    individual job records. Raises a clear RuntimeError when not
-    connected; callers (app.py) show that as a plain warning rather than
-    a crash.
+def _list_unprocessed(service, label_id, want_new, max_pages=6):
+    """Walk the label newest-first across pages until `want_new` unprocessed messages are collected.
+    The old code only looked at the 25 newest ids, so once those were processed, older alerts were never reached."""
+    out, token, pages = [], None, 0
+    while len(out) < want_new and pages < max_pages:
+        kwargs = dict(userId="me", labelIds=[label_id], maxResults=100)
+        if token:
+            kwargs["pageToken"] = token
+        resp = service.users().messages().list(**kwargs).execute()
+        for m in resp.get("messages", []):
+            if not db.is_gmail_message_processed(m["id"]):
+                out.append(m)
+                if len(out) >= want_new:
+                    break
+        token = resp.get("nextPageToken")
+        pages += 1
+        if not token:
+            break
+    return out
 
-    Returns (jobs, parsing_failures): `jobs` are real per-vacancy records
-    ready for scoring; `parsing_failures` are the honest
-    "Unable to extract individual jobs from this ... alert format"
-    records, kept separate so app.py can route them to the dedicated
-    Parsing Failures section instead of the normal job list."""
+
+def fetch_gmail_job_alerts(max_results=40):
+    """Fetch up to `max_results` NEW (not yet processed) alert emails per label (LinkedIn / Indeed / Company),
+    parse each into individual job records. Raises RuntimeError if not connected OR if none of the configured
+    labels exist (with the list of labels found, so a naming mismatch is visible instead of a silent 0)."""
     if not gmail_connected():
         raise RuntimeError("Gmail non connesso: completa il wizard di configurazione Gmail (passi 1-5)")
 
     service = _get_service()
-    jobs, failures = [], []
+    jobs, failures, found, missing = [], [], 0, []
+    cache = {}
     for provider, label_name in LABELS.items():
-        label_id = _find_label_id(service, label_name)
+        label_id = _find_label_id(service, label_name, cache)
         if not label_id:
-            # A missing label is not fatal for the OTHER labels - just
-            # skip this one and let the caller see fewer jobs than
-            # expected. Section 9 says never crash on this.
+            missing.append(label_name)
             continue
-        msg_list = service.users().messages().list(userId="me", labelIds=[label_id], maxResults=max_results).execute()
-        for m in msg_list.get("messages", []):
-            if db.is_gmail_message_processed(m["id"]):
-                continue
+        found += 1
+        for m in _list_unprocessed(service, label_id, max_results):
             try:
                 raw = service.users().messages().get(userId="me", id=m["id"], format="raw").execute()
                 raw_bytes = base64.urlsafe_b64decode(raw["raw"])
@@ -139,6 +163,11 @@ def fetch_gmail_job_alerts(max_results=25):
                 jobs.extend(real_jobs)
                 failures.extend([r for r in records if r.get("parsing_failed")])
                 db.mark_gmail_message_processed(m["id"], label_name, "parsed" if real_jobs else "parsing_failed")
-            except Exception as e:
-                db.mark_gmail_message_processed(m["id"], label_name, f"error: {e}")
+            except Exception:
+                # transient error (network, quota): do NOT mark as processed, so it is retried next run
+                continue
+    if found == 0:
+        present = sorted(n for n in cache.get("names", []) if "job" in n.lower() or "alert" in n.lower())
+        present_txt = ", ".join(present) if present else "nessuna con 'job' o 'alert' nel nome"
+        raise RuntimeError(f"Nessuna etichetta Gmail trovata. Attese: {', '.join(missing)}. Presenti nel tuo account: {present_txt}")
     return jobs, failures
