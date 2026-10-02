@@ -1,0 +1,392 @@
+profile:
+  name: Daniele Casale
+  education:
+    - Bachelor's degree in Business Economics
+    - International Master in Digital Innovation for New Business Design
+    - Specialisation in Digital Product & Strategy
+    - UX and user-centred design knowledge
+  target_titles:
+    - junior product manager
+    - associate product manager
+    - junior product owner
+    - product operations
+    - product marketing
+    - ai product builder
+    - ai builder
+    - digital transformation analyst
+    - business analyst
+    - business development analyst
+    - innovation analyst
+    - marketing operations
+    - customer insights
+    - crm
+    - retail technology
+    - digital commerce
+    - process improvement
+    - ai business evaluator
+    - ai trainer
+    - product management ai expert
+    - commercial analyst
+    - junior category manager
+    - junior growth
+    - conversion rate optimisation
+    - product manager
+    - product owner
+    - product analyst
+  strengths:
+    - product management
+    - kpi monitoring
+    - market volume reporting
+    - competitive benchmarking
+    - market analysis
+    - interactive dashboard
+    - data visualisation
+    - ai enabled process automation
+    - requirements gathering
+    - stakeholder collaboration
+    - product and commercial reporting
+    - international fashion retail
+    - crm
+    - customer insights
+    - team coordination and coaching
+    - sales kpi
+    - conversion rate
+    - audit
+    - consulting
+    - business design
+    - financial forecasting
+    - digital product development
+    - mvp development
+    - firebase
+    - visual studio code
+    - ai assisted development
+    - microsoft excel
+    - microsoft powerpoint
+  sectors:
+    - digital products
+    - artificial intelligence
+    - saas
+    - fintech
+    - digital public services
+    - automotive
+    - fashion
+    - retail
+    - outdoor and action sports
+    - consulting
+    - travel technology
+    - innovation and venture building
+  languages_spoken:
+    italian: native
+    english: professional
+    spanish: advanced
+    french: basic
+  # "basic" French means the profile does NOT reliably cover roles that
+  # require French at a working/fluent level - treated as a gap, not a strength.
+  future_relocation_interest:
+    - bolivia
+    - south america
+    - latin america
+
+hard_filters:
+  # Applied to every job before priority classification, regardless of score.
+  exclude_unpaid: true
+  exclude_volunteer: true
+  exclude_commission_only: true
+  exclude_equity_only: true
+  exclude_bounty_only: true
+  exclude_internships_by_default: true   # unless it qualifies for STRATEGIC INTERNSHIP
+  max_experience_years: 1                 # 2 allowed only if explicitly "preferred", never mandatory
+
+diamond:
+  max_experience_years: 2
+  max_experience_years_if_preferred: 3
+  min_annual_salary_eur: 40000
+  role_keywords:
+    - product management
+    - product operations
+    - product marketing
+    - digital product
+    - ai product
+    - ai builder
+    - digital transformation
+  worldwide_evidence:
+    - worldwide remote
+    - remote worldwide
+    - work from anywhere
+    - applicants from all countries
+    - globally distributed
+    - no location restriction
+    - no location restrictions
+    - international contractor
+    - employer of record
+    - "eor available"
+  worldwide_exclusions:
+    - us only
+    - u.s. only
+    - united states only
+    - uk only
+    - united kingdom only
+    - canada only
+    - must be based in
+    - must reside in
+    - remote within
+    - timezone overlap required
+    - work permit for
+    - must have the right to work in
+
+gold:
+  max_experience_years: 2
+  max_experience_years_if_preferred: 3
+  min_hourly_rate_for_annualisation: 0    # annualise only when hours are guaranteed - see scoring.py
+  preferred_locations:
+    - chiasso
+    - stabio
+    - mendrisio
+    - rancate
+    - lugano
+    - manno
+    - bioggio
+    - agno
+    - bellinzona
+    - ticino
+    - milano
+    - milan
+  role_keywords:
+    - product management
+    - product marketing
+    - ai builder
+    - digital product
+    - business analysis
+    - business development
+    - marketing operations
+    - customer insights
+    - retail technology
+    - digital commerce
+    - innovation
+    - process improvement
+    - category analysis
+    - commercial analysis
+  compensation_preference_chf_fulltime: 55000
+  compensation_preference_chf_50pct: 27500
+  office_days_scoring:
+    "1": positive
+    "2": positive
+    "3": acceptable
+    "4": penalty
+    "5": penalty
+
+silver:
+  max_experience_years: 2
+  min_annual_salary_eur: 40000
+  min_compatibility_if_salary_missing: 90
+  role_keywords:
+    - product management
+    - product operations
+    - product marketing
+    - ai builder
+    - digital transformation
+    - business analysis
+    - customer insights
+    - retail technology
+    - marketing operations
+  eligible_remote_scope:
+    - italy
+    - europe
+
+strategic_internship:
+  conditions:
+    - internationally recognised company
+    - direct relevance to product, ai, digital or retail technology
+    - structured development programme
+    - clear compensation
+    - clear responsibilities
+    - strong employability after completion
+    - canton ticino or highly flexible remote arrangement
+    - meaningfully stronger learning value than a generic internship
+  minimum_conditions_met: 5   # "most of these" -> require at least 5 of 8
+
+high_value_part_time:
+  min_hours_per_week: 15
+  max_hours_per_week: 25
+  min_workload_pct: 40
+  max_workload_pct: 60
+  min_contractor_hourly_rate_eur_usd: 25
+  reference_employee_net_monthly_eur_20h: 1300
+  role_keywords:
+    - product
+    - ai
+    - business
+    - crm
+    - analytics
+    - digital commerce
+    - process improvement
+
+watchlist_companies:
+  - PagoPA
+  - VF Corporation
+  - BMW Group
+  - lastminute.com
+  - Medacta
+  - Satispay
+  - Product People
+  - Remote
+  - Canonical
+  - GitLab
+  - Automattic
+  - Camunda
+  - Storyblok
+  - Sysdig
+  - Launchmetrics
+  - 360dialog
+  - ShippyPro
+  - Jet HR
+  - Revolut
+  - Kering
+
+# Per-company ATS wiring for the connectors in ats_connectors.py (spec
+# section 5/6). Only entries with a `board_token`/`site_id`/`job_board_name`
+# were actually verified reachable in this build (see
+# connector_test_report.md) - Canonical and GitLab on Greenhouse, Camunda on
+# Ashby. Every other watchlist company is intentionally left UNCONFIGURED
+# rather than guessing a board token that was never confirmed live: an
+# unconfigured company still shows up in the Connector Status dashboard as
+# "requires manual configuration", it is never silently skipped. See
+# COMPANY_WATCHLIST_SETUP.md for exactly how to find and add a company's
+# real board token yourself (a few minutes each, no coding).
+ats_directory:
+  Canonical:
+    ats: greenhouse
+    board_token: canonical
+  GitLab:
+    ats: greenhouse
+    board_token: gitlab
+  Camunda:
+    ats: ashby
+    job_board_name: camunda
+  # Unconfigured (see COMPANY_WATCHLIST_SETUP.md to fill these in):
+  PagoPA: {ats: unconfigured}
+  VF Corporation: {ats: unconfigured}
+  BMW Group: {ats: unconfigured}
+  lastminute.com: {ats: unconfigured}
+  Medacta: {ats: unconfigured}
+  Satispay: {ats: unconfigured}
+  Product People:
+    ats: greenhouse
+    board_token: productpeople
+  Remote:
+    ats: greenhouse
+    board_token: remotecom
+  Automattic:
+    ats: greenhouse
+    board_token: automatticcareers
+  Storyblok:
+    ats: greenhouse
+    board_token: storyblok
+  Sysdig: {ats: unconfigured}
+  Launchmetrics:
+    ats: teamtailor
+    subdomain: launchmetrics
+  360dialog:
+    ats: workable
+    account: 360dialog-gmbh
+  ShippyPro: {ats: unconfigured}
+  Jet HR: {ats: unconfigured}
+  Revolut: {ats: unconfigured}
+  Kering: {ats: unconfigured}
+
+scoring:
+  # Percent weights, must sum to 100.
+  role_weight: 20
+  skills_weight: 20
+  seniority_weight: 15
+  location_weight: 15
+  contract_compensation_weight: 10
+  sector_weight: 8
+  growth_weight: 5
+  language_weight: 4
+  brand_weight: 3
+  bands:
+    apply_now: 90
+    strong_opportunity: 82
+    consider: 75
+    stretch: 65
+    # below stretch -> "Hidden"
+
+# Title gate (scoring.title_gate): the job TITLE must contain one of the include phrases
+# and none of the exclude phrases. Edit these two lists to tune the radar without touching code.
+title_gate:
+  include:
+    - product manager
+    - product management
+    - product owner
+    - product operations
+    - product ops
+    - product marketing
+    - product analyst
+    - product specialist
+    - technical product
+    - ai product
+    - ai builder
+    - digital product
+    - digital transformation
+    - business analyst
+    - business analysis
+    - business development analyst
+    - innovation
+    - marketing operations
+    - marketing ops
+    - customer insights
+    - consumer insights
+    - crm
+    - retail technology
+    - digital commerce
+    - ecommerce
+    - e commerce
+    - process improvement
+    - commercial analyst
+    - category manager
+    - growth
+    - conversion
+    - program manager
+    - project manager
+    - strategy
+    - operations analyst
+    - data analyst
+    - insights analyst
+  exclude:
+    - sales
+    - account executive
+    - account manager
+    - account director
+    - sdr
+    - bdr
+    - adr
+    - sales development
+    - renewal
+    - renewals
+    - customer success
+    - customer support
+    - support engineer
+    - solutions engineer
+    - recruiter
+    - talent acquisition
+    - software engineer
+    - backend
+    - frontend
+    - full stack
+    - developer
+    - devops
+    - sre
+    - data engineer
+    - machine learning engineer
+    - security engineer
+    - qa engineer
+    - data scientist
+    - architect
+    - accountant
+    - payroll
+    - legal counsel
+    - partner manager
+    - channel
+    - territory
+    - field marketing
