@@ -1,9 +1,10 @@
-import io
 import json
 import os
+import re
 from datetime import datetime, timezone
 
 import pandas as pd
+import requests
 import streamlit as st
 import yaml
 
@@ -21,30 +22,30 @@ try:
 except Exception:
     GMAIL_MODULE_OK = False
 
-st.set_page_config(page_title="Daniele Job Radar", page_icon="🎯", layout="centered")
+st.set_page_config(page_title="Job Radar", page_icon="🎯", layout="centered")
 
-# ---------------------------------------------------------------------------
-# Mobile-first CSS: bigger tap targets, no forced horizontal scroll, compact
-# cards. Streamlit is already responsive (sidebar collapses to a hamburger
-# menu on phones automatically); this just tightens things up further.
-# ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-  .block-container {padding-top: 1rem; padding-bottom: 4rem; max-width: 760px;}
+  .block-container {padding-top: 1.2rem; padding-bottom: 4rem; max-width: 760px;}
   div[data-testid="stVerticalBlockBorderWrapper"] {overflow-x: hidden;}
-  button, .stButton>button, .stDownloadButton>button, .stLinkButton>a {
-      min-height: 2.6rem; font-size: 0.95rem; border-radius: 10px; width: 100%;
-  }
-  .badge {display:inline-block; padding:2px 10px; border-radius:12px; font-size:0.78rem; font-weight:700; margin-right:6px;}
-  .badge-diamond {background:#c7d2fe; color:#1e1b4b;}
-  .badge-potential {background:#ede9fe; color:#4c1d95; border:1px dashed #7c3aed;}
-  .badge-gold {background:#fde68a; color:#78350f;}
-  .badge-silver {background:#e2e8f0; color:#334155;}
-  .badge-intern {background:#bbf7d0; color:#064e3b;}
-  .badge-parttime {background:#fbcfe8; color:#831843;}
-  .badge-band {background:#0f172a; color:#e2e8f0;}
-  .small-muted {color:#64748b; font-size:0.82rem;}
-  img {max-width: 100%;}
+  div[data-testid="stButton"], div[data-testid="stLinkButton"], div[data-testid="stDownloadButton"],
+  div[data-testid="stFormSubmitButton"],
+  div[data-testid="stElementContainer"]:has(> div[data-testid="stButton"]),
+  div[data-testid="stElementContainer"]:has(> div[data-testid="stLinkButton"]),
+  div[data-testid="stElementContainer"]:has(> div[data-testid="stDownloadButton"]) {width: 100% !important;}
+  div[data-testid="stButton"] button, div[data-testid="stLinkButton"] a, div[data-testid="stDownloadButton"] button,
+  div[data-testid="stFormSubmitButton"] button {width: 100% !important; min-height: 2.5rem; border-radius: 10px;}
+  div[data-testid="stVerticalBlockBorderWrapper"] div[data-testid="stVerticalBlock"] {gap: 0.45rem;}
+  .badge {display:inline-block; padding:2px 9px; border-radius:10px; font-size:0.75rem; font-weight:700; margin-right:6px;}
+  .b-diamond {background:#c7d2fe; color:#1e1b4b;}
+  .b-gold {background:#fde68a; color:#78350f;}
+  .b-silver {background:#e2e8f0; color:#334155;}
+  .b-intern {background:#bbf7d0; color:#064e3b;}
+  .b-part {background:#fbcfe8; color:#831843;}
+  .b-pot {border:1px dashed #7c3aed;}
+  .score {font-weight:700; font-size:0.85rem; color:#0f172a;}
+  .flag {font-size:0.8rem; color:#b45309;}
+  div[data-testid="stPills"] button {border-radius: 999px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,368 +54,536 @@ with open("config.yaml", encoding="utf-8") as f:
 
 db.init_db()
 
-# ---------------------------------------------------------------------------
-# Gmail OAuth callback - Google redirects the browser back to THIS app's own
-# URL with ?code=...&state=... after the person approves the consent screen
-# (wizard step 5). This is a brand-new page load (a new Streamlit session),
-# so it's handled unconditionally at the top of every run, before any UI is
-# built, using only what gmail_oauth.py stored server-side (never
-# session_state, which would already be gone by now).
-# ---------------------------------------------------------------------------
+# Gmail OAuth callback: Google redirects back here with ?code=&state= (new session).
 if GMAIL_MODULE_OK:
     qp = st.query_params
     if "code" in qp and "state" in qp:
         try:
             gmail_oauth.exchange_code(qp["code"], qp["state"])
-            st.session_state["gmail_wizard_message"] = ("success", "✅ Gmail connesso correttamente.")
+            st.session_state["gmail_wizard_message"] = ("success", "Gmail connesso.")
         except Exception as e:
             st.session_state["gmail_wizard_message"] = ("error", f"Connessione Gmail non riuscita: {e}")
         st.query_params.clear()
         st.rerun()
-    if "error" in qp:  # Google itself reports a denial/error via ?error=...
+    if "error" in qp:
         st.session_state["gmail_wizard_message"] = ("error", f"Google ha segnalato un errore: {qp['error']}")
         st.query_params.clear()
         st.rerun()
 
-PRIORITY_BADGES = {
-    "DIAMOND": ("💎 DIAMOND", "badge-diamond"),
-    "POTENTIAL_DIAMOND": ("💎 POTENTIAL DIAMOND", "badge-potential"),
-    "GOLD": ("🥇 GOLD", "badge-gold"),
-    "POTENTIAL_GOLD": ("🥇 POTENTIAL GOLD", "badge-potential"),
-    "SILVER": ("🥈 SILVER", "badge-silver"),
-    "POTENTIAL_SILVER": ("🥈 POTENTIAL SILVER", "badge-potential"),
-    "STRATEGIC_INTERNSHIP": ("🎓 STRATEGIC INTERNSHIP", "badge-intern"),
-    "HIGH_VALUE_PART_TIME": ("⏱️ HIGH-VALUE PART-TIME", "badge-parttime"),
+
+# ---------------------------------------------------------------------------
+# Small UI helpers
+# ---------------------------------------------------------------------------
+def chips(label, options, default, key, single=False, hide_label=False):
+    """Pill chips where available (Streamlit >= 1.40), multiselect otherwise."""
+    if hasattr(st, "pills"):
+        val = st.pills(label, options, selection_mode="single" if single else "multi",
+                       default=default, key=key,
+                       label_visibility="collapsed" if hide_label else "visible")
+        if single:
+            return val
+        return list(val or [])
+    if single:
+        return st.radio(label, options, index=options.index(default), horizontal=True, key=key)
+    return st.multiselect(label, options, default=default, key=key)
+
+
+def secret(name):
+    try:
+        if name in st.secrets:
+            return st.secrets[name]
+    except Exception:
+        pass
+    return os.environ.get(name)
+
+
+# ---------------------------------------------------------------------------
+# Geographic eligibility
+# Remote job boards are full of "remote" roles that only accept one country
+# (Germany only, US only, must be based in Portugal...). For someone living in
+# Lombardy and open to Swiss cross-border work, those are noise.
+# ---------------------------------------------------------------------------
+OK_IT = "Italia"
+OK_CH = "Svizzera"
+OK_EU = "Europa/UE"
+OK_WORLD = "Ovunque"
+ALLOWED = {OK_IT, OK_CH, OK_EU, OK_WORLD}
+
+PLACE_TERMS = {
+    # allowed
+    "italy": OK_IT, "italia": OK_IT, "italian": OK_IT, "milan": OK_IT, "milano": OK_IT, "lombardy": OK_IT,
+    "lombardia": OK_IT, "rome": OK_IT, "roma": OK_IT, "turin": OK_IT, "torino": OK_IT, "bologna": OK_IT,
+    "genoa": OK_IT, "genova": OK_IT, "como": OK_IT, "varese": OK_IT, "monza": OK_IT, "bergamo": OK_IT,
+    "switzerland": OK_CH, "swiss": OK_CH, "schweiz": OK_CH, "suisse": OK_CH, "svizzera": OK_CH,
+    "ticino": OK_CH, "lugano": OK_CH, "chiasso": OK_CH, "mendrisio": OK_CH, "bellinzona": OK_CH,
+    "locarno": OK_CH, "stabio": OK_CH, "zurich": OK_CH, "zürich": OK_CH, "zuerich": OK_CH, "geneva": OK_CH,
+    "genève": OK_CH, "geneve": OK_CH, "ginevra": OK_CH, "basel": OK_CH, "bern": OK_CH, "berne": OK_CH,
+    "lausanne": OK_CH, "zug": OK_CH, "lucerne": OK_CH, "luzern": OK_CH, "winterthur": OK_CH,
+    "europe": OK_EU, "european union": OK_EU, "emea": OK_EU, "eu": OK_EU, "eea": OK_EU, "cet": OK_EU,
+    "cest": OK_EU, "european": OK_EU, "europa": OK_EU,
+    "worldwide": OK_WORLD, "anywhere": OK_WORLD, "global": OK_WORLD, "globally": OK_WORLD,
+    # not allowed
+    "germany": "Germania", "deutschland": "Germania", "german": "Germania", "berlin": "Germania",
+    "munich": "Germania", "münchen": "Germania", "hamburg": "Germania", "frankfurt": "Germania",
+    "cologne": "Germania", "köln": "Germania", "stuttgart": "Germania", "düsseldorf": "Germania",
+    "portugal": "Portogallo", "lisbon": "Portogallo", "lisboa": "Portogallo", "porto": "Portogallo",
+    "spain": "Spagna", "españa": "Spagna", "madrid": "Spagna", "barcelona": "Spagna", "valencia": "Spagna",
+    "france": "Francia", "paris": "Francia", "lyon": "Francia",
+    "united kingdom": "Regno Unito", "great britain": "Regno Unito", "england": "Regno Unito",
+    "london": "Regno Unito", "manchester": "Regno Unito", "scotland": "Regno Unito", "british": "Regno Unito",
+    "ireland": "Irlanda", "dublin": "Irlanda",
+    "netherlands": "Paesi Bassi", "amsterdam": "Paesi Bassi", "rotterdam": "Paesi Bassi", "dutch": "Paesi Bassi",
+    "belgium": "Belgio", "brussels": "Belgio", "austria": "Austria", "vienna": "Austria", "wien": "Austria",
+    "poland": "Polonia", "warsaw": "Polonia", "krakow": "Polonia", "czech": "Rep. Ceca", "prague": "Rep. Ceca",
+    "sweden": "Svezia", "stockholm": "Svezia", "denmark": "Danimarca", "copenhagen": "Danimarca",
+    "norway": "Norvegia", "oslo": "Norvegia", "finland": "Finlandia", "helsinki": "Finlandia",
+    "romania": "Romania", "bucharest": "Romania", "greece": "Grecia", "athens": "Grecia",
+    "hungary": "Ungheria", "budapest": "Ungheria", "estonia": "Estonia", "tallinn": "Estonia",
+    "latvia": "Lettonia", "lithuania": "Lituania", "croatia": "Croazia", "serbia": "Serbia",
+    "bulgaria": "Bulgaria", "ukraine": "Ucraina", "turkey": "Turchia", "istanbul": "Turchia",
+    "luxembourg": "Lussemburgo", "slovakia": "Slovacchia", "slovenia": "Slovenia", "cyprus": "Cipro",
+    "malta": "Malta",
+    "united states": "USA", "u.s.": "USA", "america": "USA", "american": "USA", "new york": "USA",
+    "san francisco": "USA", "california": "USA", "texas": "USA", "seattle": "USA", "boston": "USA",
+    "chicago": "USA", "austin": "USA", "los angeles": "USA", "north america": "Nord America",
+    "canada": "Canada", "toronto": "Canada", "vancouver": "Canada", "montreal": "Canada",
+    "latam": "America Latina", "latin america": "America Latina", "mexico": "Messico", "brazil": "Brasile",
+    "argentina": "Argentina", "colombia": "Colombia", "americas": "Americhe",
+    "india": "India", "bangalore": "India", "apac": "Asia-Pacifico", "asia": "Asia", "singapore": "Singapore",
+    "philippines": "Filippine", "japan": "Giappone", "australia": "Australia", "sydney": "Australia",
+    "new zealand": "Nuova Zelanda", "israel": "Israele", "tel aviv": "Israele", "dubai": "EAU",
+    "united arab emirates": "EAU", "south africa": "Sudafrica", "nigeria": "Nigeria", "kenya": "Kenya",
+    "pakistan": "Pakistan", "egypt": "Egitto",
 }
+# Short codes are only trusted inside location fields ("us" is a common English word).
+CODE_TERMS = {"us": "USA", "usa": "USA", "uk": "Regno Unito", "de": "Germania", "pt": "Portogallo",
+              "es": "Spagna", "fr": "Francia", "nl": "Paesi Bassi", "ch": OK_CH, "it": OK_IT,
+              "ca": "Canada", "gb": "Regno Unito", "ie": "Irlanda", "pl": "Polonia", "est": "USA",
+              "pst": "USA", "emea": OK_EU}
 
-st.title("🎯 Daniele Job Radar")
-st.caption("Diamond · Gold · Silver (+ Potential) · Strategic Internships · High-Value Part-Time — "
-           "filtri obbligatori sempre attivi, nessuna informazione mancante viene inventata.")
 
-DEFAULT_QUERIES = ["junior product manager", "associate product manager", "product owner", "product operations",
-                    "product marketing", "junior business analyst", "digital transformation", "customer insights"]
+def _rx(terms):
+    alts = sorted(terms, key=len, reverse=True)
+    return re.compile(r"(?<![a-z])(" + "|".join(re.escape(t) for t in alts) + r")(?![a-z])")
 
-with st.expander("🔎 Filtri e fonti", expanded=False):
-    threshold = st.slider("Compatibilità minima per essere mostrata (%)", 0, 100, 45, step=5,
-                           help="Abbassala se vedi poche posizioni: Diamond/Gold/Silver hanno comunque le loro regole obbligatorie separate, non vengono mai bypassate da questo slider.")
-    queries = st.multiselect("Parole chiave di ricerca", DEFAULT_QUERIES + ["product manager", "business analyst", "ai builder", "marketing operations", "crm analyst", "innovation analyst", "retail technology", "process improvement", "category manager", "growth analyst"], default=DEFAULT_QUERIES)
-    base_sources = ["Himalayas", "Arbeitnow", "Remotive", "We Work Remotely", "The Muse", "Remote OK"]
-    optional_sources = []
-    if connectors.adzuna_configured():
-        optional_sources.append("Adzuna")
-    else:
-        st.caption("⚪ Adzuna: non configurato (opzionale — imposta ADZUNA_APP_ID/ADZUNA_APP_KEY, vedi CONNECTOR_SETUP.md)")
-    if connectors.jooble_configured("it") or connectors.jooble_configured("ch"):
-        optional_sources.append("Jooble")
-    else:
-        st.caption("⚪ Jooble: non configurato (opzionale — imposta JOOBLE_API_KEY_IT/JOOBLE_API_KEY_CH, vedi CONNECTOR_SETUP.md)")
-    if GMAIL_MODULE_OK and gmail_connector.gmail_connected():
-        optional_sources.append("Gmail (LinkedIn/Indeed/Company alert)")
-    else:
-        st.caption("⚪ Gmail: non connesso — apri **🔗 Configura Gmail** qui sotto per collegarlo in pochi passi.")
-    include_ats = st.checkbox("Includi connettori aziendali watchlist (Greenhouse/Lever/Ashby/...)", value=True)
-    sources_enabled = st.multiselect("Fonti aggregatore attive", base_sources + optional_sources, default=base_sources + optional_sources)
-    uploaded = st.file_uploader("Importa manualmente un alert LinkedIn/Indeed/azienda (.eml) — fallback se non usi Gmail",
-                                 type=["eml"], accept_multiple_files=True)
 
-    st.divider()
-    st.markdown("**📄 Usa il tuo CV per il matching (opzionale)**")
-    st.caption("Carica il tuo CV: viene letto solo in questa sessione del browser (non viene salvato da nessuna parte) "
-               "ed estrae parole chiave di ruolo/competenza da confrontare con le descrizioni degli annunci, "
-               "in aggiunta a quelle già scritte in config.yaml. Rivedi tu quali tenere prima che vengano usate.")
-    cv_file = st.file_uploader("Il tuo CV (PDF, DOCX o TXT)", type=["pdf", "docx", "txt", "md"], key="cv_upload")
-    cv_keywords_accepted = st.session_state.get("cv_keywords_accepted", [])
-    if cv_file is not None:
-        cv_sig = f"{cv_file.name}:{cv_file.size}"
-        if st.session_state.get("cv_sig") != cv_sig:
-            try:
-                cv_text = cv_parser.extract_text(cv_file.getvalue(), cv_file.name)
-                st.session_state.cv_keywords_found = cv_parser.extract_keywords(cv_text)
-                st.session_state.cv_sig = cv_sig
-                st.session_state.cv_error = None
-            except Exception as e:
-                st.session_state.cv_error = str(e)
-                st.session_state.cv_keywords_found = []
-        if st.session_state.get("cv_error"):
-            st.warning(f"Non sono riuscito a leggere il CV: {st.session_state['cv_error']}")
-        elif st.session_state.get("cv_keywords_found"):
-            st.caption("Parole chiave trovate nel CV — togli la spunta a quelle che non vuoi usare per il matching:")
-            cv_keywords_accepted = []
-            for i, kw in enumerate(st.session_state["cv_keywords_found"]):
-                if st.checkbox(kw, value=True, key=f"cvkw_{i}"):
-                    cv_keywords_accepted.append(kw)
-            st.session_state.cv_keywords_accepted = cv_keywords_accepted
-            if st.button("🗑️ Rimuovi CV e parole chiave da questa sessione"):
-                for k in ("cv_sig", "cv_keywords_found", "cv_keywords_accepted", "cv_error"):
-                    st.session_state.pop(k, None)
-                st.rerun()
+PLACE_RX = _rx(PLACE_TERMS)
+CODE_RX = _rx(CODE_TERMS)
 
-    st.divider()
-    st.markdown("**Privacy e dati (sezione 29)**")
-    pcol1, pcol2 = st.columns(2)
-    if pcol1.button("🗑️ Elimina storico posizioni locale"):
-        db.delete_all_job_history()
-        st.success("Storico posizioni eliminato.")
-    if pcol2.button("📤 Esporta i miei dati"):
-        data = db.export_all_data()
-        st.download_button("⬇️ Scarica JSON", json.dumps(data, indent=2, default=str).encode("utf-8"),
-                            file_name="job_radar_export.json", mime="application/json")
-    if GMAIL_MODULE_OK:
-        if st.button("🗑️ Elimina dati email importati"):
+RESTRICTION_PATTERNS = [
+    r"([a-z][a-z .\-]{1,30}?)[\s\-]+only\b",
+    r"only (?:for |open to )?(?:candidates|applicants|people|residents)? ?(?:based|located|living|residing) in ([^.;\n]{2,60})",
+    r"(?:must|need to|needs to|required to|should|have to) (?:be )?(?:currently )?(?:based|located|living|reside|residing|resident|live) in (?:the )?([^.;\n]{2,60})",
+    r"(?:candidates|applicants) (?:must be |need to be )?(?:based|located|residing) in (?:the )?([^.;\n]{2,60})",
+    r"(?:right|authori[sz]ation|authori[sz]ed|eligible|eligibility|permit) to work in (?:the )?([^.;\n]{2,40})",
+    r"remote\s*[\(\-–:]\s*([^\)\n,;]{2,40})",
+    r"(?:open|available) (?:only )?to (?:residents|citizens) of (?:the )?([^.;\n]{2,40})",
+]
+RESTRICTION_RX = [re.compile(p) for p in RESTRICTION_PATTERNS]
+
+REMOTE_SOURCES = ("himalayas", "remotive", "we work remotely", "remote ok", "remoteok")
+
+
+def places_in(text, allow_codes=False):
+    t = (text or "").lower()
+    found = {PLACE_TERMS[m.group(1)] for m in PLACE_RX.finditer(t)}
+    if allow_codes:
+        found |= {CODE_TERMS[m.group(1)] for m in CODE_RX.finditer(t)}
+    return found
+
+
+def location_text(j, r):
+    parts = [j.get(k) for k in ("location", "candidate_required_location", "job_location", "locations",
+                                "country", "region", "city")]
+    parts += [r.get("remote_scope"), r.get("country_restrictions")]
+    out = []
+    for p in parts:
+        if isinstance(p, (list, tuple)):
+            out.extend(str(x) for x in p)
+        elif p:
+            out.append(str(p))
+    return " | ".join(out)
+
+
+def geo_check(j, r):
+    """Return dict(eligible, where=set of 'remote'/'ch'/'it', reason, unverified)."""
+    loc = location_text(j, r)
+    desc = " ".join(str(j.get(k) or "") for k in ("title", "description", "summary", "snippet"))
+    low_all = (loc + " \n " + desc).lower()
+
+    # 1) explicit single-country restrictions anywhere in the text
+    blocked = set()
+    for rx in RESTRICTION_RX:
+        for m in rx.finditer(low_all):
+            clause = m.group(1)
+            pl = places_in(clause, allow_codes=True)
+            if pl and not (pl & ALLOWED):
+                blocked |= pl
+
+    loc_places = places_in(loc, allow_codes=True)
+    title_places = places_in(j.get("title") or "")
+    source = (j.get("source") or "").lower()
+    is_remote = (any(s in source for s in REMOTE_SOURCES) or "remote" in low_all[:400]
+                 or "remote" in loc.lower() or OK_WORLD in loc_places)
+
+    where = set()
+    if OK_CH in loc_places or OK_CH in title_places:
+        where.add("ch")
+    if OK_IT in loc_places or OK_IT in title_places:
+        where.add("it")
+
+    if blocked and not (where & {"ch", "it"}):
+        return {"eligible": False, "where": where,
+                "reason": "Solo per " + ", ".join(sorted(blocked)), "unverified": False}
+
+    if is_remote:
+        if loc_places and not (loc_places & ALLOWED):
+            return {"eligible": False, "where": where,
+                    "reason": "Remoto solo da " + ", ".join(sorted(loc_places)), "unverified": False}
+        where.add("remote")
+        return {"eligible": True, "where": where, "reason": "",
+                "unverified": not (loc_places & ALLOWED)}
+
+    # on-site / hybrid: only Italy (Lombardy commute) or Switzerland make sense
+    if where & {"ch", "it"}:
+        return {"eligible": True, "where": where, "reason": "", "unverified": False}
+    if loc_places:
+        return {"eligible": False, "where": where,
+                "reason": "In sede a " + ", ".join(sorted(loc_places)), "unverified": False}
+    return {"eligible": True, "where": where, "reason": "", "unverified": True}
+
+
+# ---------------------------------------------------------------------------
+# Swiss sources (the remote boards above barely cover Ticino/Zurich)
+# ---------------------------------------------------------------------------
+def adzuna_ch_configured():
+    return bool(secret("ADZUNA_APP_ID") and secret("ADZUNA_APP_KEY"))
+
+
+def fetch_adzuna_ch(query, where="Svizzera"):
+    params = {"app_id": secret("ADZUNA_APP_ID"), "app_key": secret("ADZUNA_APP_KEY"),
+              "what": query, "results_per_page": 50, "content-type": "application/json"}
+    if where and where != "Svizzera":
+        params["where"] = where
+    resp = requests.get("https://api.adzuna.com/v1/api/jobs/ch/search/1", params=params, timeout=20)
+    resp.raise_for_status()
+    out = []
+    for it in resp.json().get("results", []):
+        sal = ""
+        if it.get("salary_min") or it.get("salary_max"):
+            sal = f"CHF {int(it.get('salary_min') or 0):,}–{int(it.get('salary_max') or 0):,}".replace(",", "'")
+        out.append({
+            "title": it.get("title", ""),
+            "company": (it.get("company") or {}).get("display_name", ""),
+            "location": ", ".join((it.get("location") or {}).get("area", [])) or "Switzerland",
+            "description": it.get("description", ""),
+            "url": it.get("redirect_url", ""),
+            "source": "Adzuna CH",
+            "published_at": (it.get("created") or "")[:10],
+            "salary": sal,
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Header + search controls
+# ---------------------------------------------------------------------------
+st.title("🎯 Job Radar")
+
+ROLE_OPTIONS = ["junior product manager", "associate product manager", "product owner",
+                "product manager", "product operations", "product marketing", "junior business analyst", "business analyst",
+                "pricing analyst", "revenue management", "digital transformation", "ai builder",
+                "marketing operations", "customer insights", "crm analyst", "innovation analyst",
+                "growth analyst", "category manager", "retail technology", "process improvement"]
+DEFAULT_ROLES = ["junior product manager", "associate product manager", "product owner", "product operations",
+                 "junior business analyst", "pricing analyst", "digital transformation"]
+
+base_sources = ["Himalayas", "Arbeitnow", "Remotive", "We Work Remotely", "The Muse", "Remote OK"]
+optional_sources = []
+if connectors.adzuna_configured():
+    optional_sources.append("Adzuna")
+if adzuna_ch_configured():
+    optional_sources.append("Adzuna Svizzera")
+if connectors.jooble_configured("it"):
+    optional_sources.append("Jooble Italia")
+if connectors.jooble_configured("ch"):
+    optional_sources.append("Jooble Svizzera")
+gmail_ok = GMAIL_MODULE_OK and gmail_connector.gmail_connected()
+if gmail_ok:
+    optional_sources.append("Gmail alert")
+all_sources = base_sources + optional_sources
+swiss_sources_available = adzuna_ch_configured() or connectors.jooble_configured("ch")
+
+WHERE_OPTIONS = ["Tutte", "🌍 Remoto", "🇨🇭 Svizzera", "🇮🇹 Italia"]
+where_choice = chips("Dove", WHERE_OPTIONS, "Tutte", key="where", single=True) or "Tutte"
+
+with st.expander("🔎 Ruoli e fonti"):
+    roles = chips("Ruoli da cercare", ROLE_OPTIONS, DEFAULT_ROLES, key="roles")
+    extra = st.text_input("Aggiungi altri ruoli", placeholder="es. revenue analyst, pricing manager",
+                          key="extra_roles")
+    roles += [r.strip().lower() for r in extra.split(",") if r.strip()]
+    sources_enabled = chips("Fonti", all_sources, all_sources, key="sources")
+    include_ats = st.toggle("Pagine carriere delle aziende in watchlist", value=True)
+    if not swiss_sources_available:
+        st.caption("Per gli annunci in Svizzera serve una chiave gratuita Adzuna "
+                   "(ADZUNA_APP_ID / ADZUNA_APP_KEY) o Jooble (JOOBLE_API_KEY_CH) nei Secrets di Streamlit.")
+
+with st.expander("⚙️ Filtri"):
+    TIERS = {"💎 Diamond": ["DIAMOND"], "🥇 Gold": ["GOLD"], "🥈 Silver": ["SILVER"],
+             "🎓 Stage": ["STRATEGIC_INTERNSHIP"], "⏱️ Part-time": ["HIGH_VALUE_PART_TIME"]}
+    tiers = chips("Livello", list(TIERS), list(TIERS), key="tiers")
+    include_potential = st.toggle("Includi i 'Potential'", value=True)
+    only_today = st.toggle("Solo nuovi di oggi", value=False)
+    threshold = st.slider("Compatibilità minima", 0, 100, 45, step=5, format="%d%%")
+
+refresh = st.button("🔄 Aggiorna", type="primary")
+
+
+# ---------------------------------------------------------------------------
+# Settings in the sidebar (CV, Gmail, manual import, privacy)
+# ---------------------------------------------------------------------------
+with st.sidebar:
+    st.header("Impostazioni")
+
+    with st.expander("📄 CV per il matching"):
+        st.caption("Letto solo in questa sessione, non viene salvato.")
+        cv_file = st.file_uploader("CV (PDF, DOCX, TXT)", type=["pdf", "docx", "txt", "md"], key="cv_upload")
+        if cv_file is not None:
+            cv_sig = f"{cv_file.name}:{cv_file.size}"
+            if st.session_state.get("cv_sig") != cv_sig:
+                try:
+                    cv_text = cv_parser.extract_text(cv_file.getvalue(), cv_file.name)
+                    st.session_state.cv_keywords_found = cv_parser.extract_keywords(cv_text)
+                    st.session_state.cv_sig = cv_sig
+                    st.session_state.cv_error = None
+                except Exception as e:
+                    st.session_state.cv_error = str(e)
+                    st.session_state.cv_keywords_found = []
+            if st.session_state.get("cv_error"):
+                st.warning(f"CV non leggibile: {st.session_state['cv_error']}")
+            elif st.session_state.get("cv_keywords_found"):
+                found = st.session_state["cv_keywords_found"]
+                st.session_state.cv_keywords_accepted = chips("Parole chiave da usare", found, found, key="cvkw")
+                if st.button("Rimuovi CV"):
+                    for k in ("cv_sig", "cv_keywords_found", "cv_keywords_accepted", "cv_error", "cvkw"):
+                        st.session_state.pop(k, None)
+                    st.rerun()
+
+    with st.expander("📧 Gmail" + (" · connesso" if gmail_ok else "")):
+        if not GMAIL_MODULE_OK:
+            st.error("Librerie Gmail mancanti: controlla requirements.txt e riavvia il deploy.")
+        else:
+            msg = st.session_state.pop("gmail_wizard_message", None)
+            if msg:
+                (st.success if msg[0] == "success" else st.error)(msg[1])
+            connected = gmail_connector.gmail_connected()
+            if connected:
+                email = st.session_state.get("gmail_connected_email")
+                if email is None:
+                    try:
+                        email = gmail_oauth.connected_email_address()
+                    except Exception as e:
+                        email = f"(non verificabile: {e})"
+                    st.session_state["gmail_connected_email"] = email
+                st.write(f"Account: **{email}**")
+                if st.button("Disconnetti Gmail"):
+                    gmail_connector.disconnect_gmail()
+                    st.session_state.pop("gmail_connected_email", None)
+                    st.rerun()
+                st.link_button("Revoca accesso su Google ↗", gmail_oauth.REVOKE_URL)
+            else:
+                st.caption("Accesso di sola lettura, dalla pagina ufficiale di Google.")
+                st.markdown("**1. Crea queste etichette in Gmail**")
+                for lbl in gmail_oauth.DEFAULT_LABELS.values():
+                    st.code(lbl, language=None)
+                st.link_button("Etichette Gmail ↗", "https://mail.google.com/mail/u/0/#settings/labels")
+
+                st.markdown("**2. Client ID e Secret di Google Cloud**")
+                client_source = gmail_oauth.client_config_source()
+                if client_source in ("streamlit_secrets", "env") or gmail_oauth.has_client_config():
+                    st.caption("✅ Configurati.")
+                    if client_source not in ("streamlit_secrets", "env") and st.button("Rimuovi credenziali"):
+                        gmail_oauth.clear_client_config()
+                        st.rerun()
+                else:
+                    st.link_button("Google Cloud → Credenziali ↗", gmail_oauth.GOOGLE_CLOUD_CREDENTIALS_URL)
+                    with st.form("gmail_client_config_form", clear_on_submit=True):
+                        in_id = st.text_input("Client ID")
+                        in_secret = st.text_input("Client Secret", type="password")
+                        if st.form_submit_button("Salva (cifrato)"):
+                            try:
+                                gmail_oauth.save_client_config(in_id, in_secret)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Non salvate: {e}")
+
+                st.markdown("**3. URI di reindirizzamento da autorizzare**")
+                base = gmail_oauth.detect_redirect_base_url()
+                if not base:
+                    base = st.text_input("URL dell'app", value=st.session_state.get("gmail_manual_base_url", ""),
+                                         placeholder="https://tuo-progetto.streamlit.app")
+                    st.session_state["gmail_manual_base_url"] = base
+                redirect_uri = gmail_oauth.redirect_uri_from_base(base) if base else None
+                if redirect_uri:
+                    st.code(redirect_uri, language=None)
+
+                st.markdown("**4. Connetti**")
+                if gmail_oauth.has_client_config() and redirect_uri:
+                    try:
+                        auth_url, _ = gmail_oauth.build_authorization_url(redirect_uri)
+                        st.link_button("🔐 Connetti Gmail", auth_url, type="primary")
+                    except Exception as e:
+                        st.error(f"Connessione non preparata: {e}")
+                else:
+                    st.caption("Completa i passi 2 e 3.")
+
+    with st.expander("📥 Importa alert (.eml)"):
+        uploaded = st.file_uploader("Email LinkedIn/Indeed salvate", type=["eml"], accept_multiple_files=True)
+
+    with st.expander("🔒 Dati"):
+        if st.button("Esporta i miei dati"):
+            st.download_button("Scarica JSON", json.dumps(db.export_all_data(), indent=2, default=str).encode("utf-8"),
+                               file_name="job_radar_export.json", mime="application/json")
+        if st.button("Elimina storico posizioni"):
+            db.delete_all_job_history()
+            st.success("Storico eliminato.")
+        if GMAIL_MODULE_OK and st.button("Elimina dati email importati"):
             db.delete_gmail_processed_ids()
-            st.success("ID messaggi Gmail elaborati eliminati (i messaggi stessi non vengono mai toccati).")
+            st.success("Eliminati.")
+
 
 # ---------------------------------------------------------------------------
-# Gmail setup wizard (spec: OAuth, gmail.readonly only, three labels,
-# Connect/Disconnect buttons, no file editing, no terminal, no password).
+# Data loading
 # ---------------------------------------------------------------------------
-with st.expander("🔗 Configura Gmail (wizard guidato, 5 passi)", expanded=not (GMAIL_MODULE_OK and gmail_connector.gmail_connected())):
-    if not GMAIL_MODULE_OK:
-        st.error("Le librerie Gmail non sono installate in questo ambiente. Verifica che requirements.txt contenga "
-                 "google-api-python-client, google-auth-oauthlib, google-auth-httplib2, cryptography e riavvia il deploy.")
-    else:
-        msg = st.session_state.pop("gmail_wizard_message", None)
-        if msg:
-            (st.success if msg[0] == "success" else st.error)(msg[1])
-
-        st.caption("La tua password Gmail non viene mai richiesta né vista da questa app. L'accesso e l'autorizzazione "
-                   "avvengono sempre sulla pagina ufficiale di Google (accounts.google.com). L'unico permesso richiesto è "
-                   "**di sola lettura** (gmail.readonly): questa app non può modificare, etichettare, inviare, inoltrare, "
-                   "archiviare o eliminare nessuna email.")
-
-        connected = gmail_connector.gmail_connected()
-
-        st.markdown("#### Passo 1 — Crea o conferma le tre etichette Gmail")
-        st.caption("Vanno create nella tua casella Gmail (una sola volta). Copia esattamente questi tre nomi:")
-        for lbl in gmail_oauth.DEFAULT_LABELS.values():
-            st.code(lbl, language=None)
-        st.link_button("Apri Impostazioni Gmail → Etichette ↗", "https://mail.google.com/mail/u/0/#settings/labels",
-                        use_container_width=True)
-        st.caption("Suggerimento: crea anche un filtro per ciascuna (Impostazioni → Filtri) che applichi automaticamente "
-                   "l'etichetta corrispondente alle email di LinkedIn/Indeed/altre aziende — vedi GMAIL_OAUTH_SETUP.md.")
-        labels_confirmed = st.checkbox("✅ Ho creato/confermato le tre etichette", value=st.session_state.get("gmail_labels_confirmed", False))
-        st.session_state["gmail_labels_confirmed"] = labels_confirmed
-
-        st.markdown("#### Passo 2 — Client ID e Client Secret di Google")
-        client_source = gmail_oauth.client_config_source()
-        if client_source in ("streamlit_secrets", "env"):
-            where = "Streamlit Secrets" if client_source == "streamlit_secrets" else "variabili d'ambiente (.env)"
-            st.success(f"Client ID/Secret trovati in {where} — il wizard li userà automaticamente, non serve altro qui.")
-        else:
-            st.caption("Da creare una sola volta nel tuo progetto Google Cloud (vedi GMAIL_OAUTH_SETUP.md per la procedura "
-                       "passo-passo con screenshot). Il Client Secret viene salvato **cifrato** nel database locale di questa "
-                       "app, non in chiaro, e non viene mai più mostrato dopo il salvataggio.")
-            st.link_button("Apri Google Cloud Console → Credenziali ↗", gmail_oauth.GOOGLE_CLOUD_CREDENTIALS_URL,
-                            use_container_width=True)
-            with st.form("gmail_client_config_form", clear_on_submit=True):
-                in_client_id = st.text_input("Client ID")
-                in_client_secret = st.text_input("Client Secret", type="password")
-                saved = st.form_submit_button("💾 Salva credenziali OAuth")
-            if saved:
-                try:
-                    gmail_oauth.save_client_config(in_client_id, in_client_secret)
-                    st.success("Credenziali salvate (cifrate).")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Non salvate: {e}")
-            if gmail_oauth.has_client_config():
-                st.success("✅ Client ID/Secret già configurati per questa app (valore non mostrato per sicurezza).")
-                if st.button("🗑️ Rimuovi credenziali OAuth salvate"):
-                    gmail_oauth.clear_client_config()
-                    st.rerun()
-
-        st.markdown("#### Passo 3 — Copia l'URI di reindirizzamento esatto in Google Cloud")
-        detected_base = gmail_oauth.detect_redirect_base_url()
-        if detected_base:
-            redirect_base = detected_base
-            st.caption("Rilevato automaticamente dall'app in esecuzione:")
-        else:
-            st.caption("Non sono riuscito a rilevare automaticamente l'URL di questa app (succede in alcuni ambienti locali). "
-                       "Incolla qui l'URL con cui apri l'app nel browser (es. https://tuo-progetto.streamlit.app):")
-            redirect_base = st.text_input("URL di questa app", value=st.session_state.get("gmail_manual_base_url", ""))
-            st.session_state["gmail_manual_base_url"] = redirect_base
-        redirect_uri = gmail_oauth.redirect_uri_from_base(redirect_base) if redirect_base else None
-        if redirect_uri:
-            st.code(redirect_uri, language=None)
-            st.caption("In Google Cloud Console → Credenziali → il tuo Client OAuth → 'URI di reindirizzamento autorizzati' → "
-                       "'Aggiungi URI' → incolla esattamente il valore sopra → Salva.")
-
-        st.markdown("#### Passo 4 — Connetti Gmail")
-        if connected:
-            st.success("✅ Gmail è già connesso.")
-        elif not gmail_oauth.has_client_config():
-            st.info("Completa prima il passo 2.")
-        elif not redirect_uri:
-            st.info("Completa prima il passo 3.")
-        else:
-            try:
-                auth_url, _ = gmail_oauth.build_authorization_url(redirect_uri)
-                st.link_button("🔐 Connetti Gmail (apre la schermata di autorizzazione Google)", auth_url, use_container_width=True)
-            except Exception as e:
-                st.error(f"Non riesco a preparare la connessione: {e}")
-
-        st.markdown("#### Passo 5 — Approva la schermata di autorizzazione Google")
-        st.caption("Dopo aver cliccato 'Connetti Gmail', Google mostrerà la sua pagina ufficiale con il permesso richiesto "
-                   "('Visualizza i messaggi email e le impostazioni' — di sola lettura). Approvandolo, Google reindirizza "
-                   "automaticamente qui e questa pagina mostrerà '✅ Gmail connesso correttamente'.")
-
-        st.divider()
-        if connected:
-            connected_email = st.session_state.get("gmail_connected_email")
-            if connected_email is None:
-                try:
-                    connected_email = gmail_oauth.connected_email_address()
-                except Exception as e:
-                    connected_email = f"(non verificabile ora: {e})"
-                st.session_state["gmail_connected_email"] = connected_email
-            st.write(f"**Account Gmail connesso:** {connected_email}")
-            gcol1, gcol2 = st.columns(2)
-            if gcol1.button("🔌 Disconnetti Gmail", use_container_width=True):
-                gmail_connector.disconnect_gmail()
-                st.session_state.pop("gmail_connected_email", None)
-                st.success("Token Gmail rimosso da questa app.")
-                st.rerun()
-            gcol2.link_button("Revoca l'accesso su Google ↗", gmail_oauth.REVOKE_URL, use_container_width=True)
-            st.caption("'Disconnetti Gmail' rimuove solo il token salvato da questa app. Per rimuovere del tutto l'accesso "
-                       "dal tuo account Google, usa 'Revoca l'accesso su Google'.")
-
-refresh = st.button("🔄 Aggiorna posizioni", type="primary", use_container_width=True)
-
-
 @st.cache_data(ttl=1800, show_spinner=False)
 def load(qs, sources, include_ats_flag, ats_directory_json):
     jobs, errors, statuses = [], [], []
 
-    def run(source_name, fn):
+    def run(name, fn):
         try:
             result = fn()
-            statuses.append({"source": source_name, "status": "ok" if result else "ok_zero_results",
-                              "jobs_retrieved": len(result), "error": None})
+            statuses.append({"fonte": name, "stato": "ok" if result else "0 risultati",
+                             "annunci": len(result), "errore": None})
             jobs.extend(result)
         except Exception as e:
-            errors.append(f"{source_name}: {e}")
-            statuses.append({"source": source_name, "status": "failed", "jobs_retrieved": 0, "error": str(e)})
+            errors.append(f"{name}: {e}")
+            statuses.append({"fonte": name, "stato": "errore", "annunci": 0, "errore": str(e)})
 
-    if "Himalayas" in sources:
-        for q in qs:
-            run(f"Himalayas ({q})", lambda q=q: connectors.fetch_himalayas(q, pages=2))
-    if "Remotive" in sources:
-        for q in qs:
-            run(f"Remotive ({q})", lambda q=q: connectors.fetch_remotive(q))
+    for q in qs:
+        if "Himalayas" in sources:
+            run(f"Himalayas · {q}", lambda q=q: connectors.fetch_himalayas(q, pages=2))
+        if "Remotive" in sources:
+            run(f"Remotive · {q}", lambda q=q: connectors.fetch_remotive(q))
+        if "Adzuna" in sources:
+            run(f"Adzuna · {q}", lambda q=q: connectors.fetch_adzuna(q))
+        if "Adzuna Svizzera" in sources:
+            run(f"Adzuna CH · {q}", lambda q=q: fetch_adzuna_ch(q))
+        if "Jooble Italia" in sources:
+            run(f"Jooble IT · {q}", lambda q=q: connectors.fetch_jooble(q, market="it"))
+        if "Jooble Svizzera" in sources:
+            run(f"Jooble CH · {q}", lambda q=q: connectors.fetch_jooble(q, market="ch"))
     if "The Muse" in sources:
         run("The Muse", lambda: connectors.fetch_the_muse(pages=1))
     if "Remote OK" in sources:
         run("Remote OK", lambda: connectors.fetch_remoteok("product"))
-    if "Adzuna" in sources:
-        for q in qs:
-            run(f"Adzuna ({q})", lambda q=q: connectors.fetch_adzuna(q))
-    if "Jooble" in sources:
-        if connectors.jooble_configured("it"):
-            run("Jooble (IT)", lambda: connectors.fetch_jooble(qs[0] if qs else "product manager", market="it"))
-        if connectors.jooble_configured("ch"):
-            run("Jooble (CH)", lambda: connectors.fetch_jooble(qs[0] if qs else "product manager", market="ch"))
     if "Arbeitnow" in sources:
         run("Arbeitnow", lambda: connectors.fetch_arbeitnow(pages=2))
     if "We Work Remotely" in sources:
         run("We Work Remotely", lambda: connectors.fetch_wwr())
+
     gmail_failures = []
-    if "Gmail (LinkedIn/Indeed/Company alert)" in sources and GMAIL_MODULE_OK:
+    if "Gmail alert" in sources and GMAIL_MODULE_OK:
         try:
             gmail_jobs, gmail_failures = gmail_connector.fetch_gmail_job_alerts()
-            statuses.append({"source": "Gmail", "status": "ok" if gmail_jobs else "ok_zero_results",
-                              "jobs_retrieved": len(gmail_jobs), "error": None})
+            statuses.append({"fonte": "Gmail", "stato": "ok" if gmail_jobs else "0 risultati",
+                             "annunci": len(gmail_jobs), "errore": None})
             jobs.extend(gmail_jobs)
         except Exception as e:
             errors.append(f"Gmail: {e}")
-            statuses.append({"source": "Gmail", "status": "failed", "jobs_retrieved": 0, "error": str(e)})
+            statuses.append({"fonte": "Gmail", "stato": "errore", "annunci": 0, "errore": str(e)})
 
     if include_ats_flag:
-        ats_directory = json.loads(ats_directory_json)
-        for company, entry in ats_directory.items():
+        for company, entry in json.loads(ats_directory_json).items():
             ats_jobs, status = ats_connectors.fetch_for_directory_entry(company, entry)
             jobs.extend(ats_jobs)
-            statuses.append({"source": f"{company} ({status['ats']})", "status": status["status"],
-                              "jobs_retrieved": status["jobs_retrieved"], "error": status["error"]})
+            statuses.append({"fonte": f"{company} ({status['ats']})", "stato": status["status"],
+                             "annunci": status["jobs_retrieved"], "errore": status["error"]})
             if status["error"]:
-                errors.append(f"{company} ({status['ats']}): {status['error']}")
+                errors.append(f"{company}: {status['error']}")
 
     return jobs, errors, statuses, gmail_failures
 
 
+if refresh:
+    load.clear()  # il tasto forza davvero un nuovo download invece della cache di 30 min
 if refresh or "jobs" not in st.session_state:
-    if refresh:
-        load.clear()  # il tasto ora forza davvero un nuovo download (prima restituiva la cache di 30 min)
-    with st.spinner("Raccolgo e valuto le posizioni..."):
-        jobs, errors, statuses, gmail_parsing_failures = load(tuple(queries), tuple(sources_enabled), include_ats, json.dumps(CFG.get("ats_directory", {})))
-        st.session_state.gmail_parsing_failures = gmail_parsing_failures
-        eml_parsing_failures = []
+    with st.spinner("Cerco e valuto le posizioni..."):
+        jobs, errors, statuses, gmail_failures = load(tuple(roles), tuple(sources_enabled), include_ats,
+                                                      json.dumps(CFG.get("ats_directory", {})))
+        eml_failures = []
         for uf in uploaded or []:
             try:
                 for rec in parse_eml_bytes(uf.getvalue(), "Email alert"):
-                    if rec.get("parsing_failed"):
-                        eml_parsing_failures.append(rec)
-                    else:
-                        jobs.append(rec)
+                    (eml_failures if rec.get("parsing_failed") else jobs).append(rec)
             except Exception as e:
-                errors.append(f"Import email {uf.name}: {e}")
-        st.session_state.eml_parsing_failures = eml_parsing_failures
-        st.session_state.jobs = jobs
-        st.session_state.errors = errors
-        st.session_state.statuses = statuses
+                errors.append(f"Import {uf.name}: {e}")
+        st.session_state.update(jobs=jobs, errors=errors, statuses=statuses,
+                                gmail_parsing_failures=gmail_failures, eml_parsing_failures=eml_failures,
+                                refreshed_at=datetime.now().strftime("%H:%M"))
         for s in statuses:
-            db.record_connector_status(s["source"], s["status"], jobs_retrieved=s["jobs_retrieved"],
-                                        connection_error=s["error"], configured=True)
+            db.record_connector_status(s["fonte"], s["stato"], jobs_retrieved=s["annunci"],
+                                       connection_error=s["errore"], configured=True)
 
 jobs = st.session_state.get("jobs", [])
 
 # --- dedup ---
 unique = {}
-duplicates_removed = 0
 for j in jobs:
-    key = ((j.get("company") or "").lower().strip(), (j.get("title") or "").lower().strip(), (j.get("url") or "").split("?")[0])
-    if key in unique:
-        duplicates_removed += 1
+    key = ((j.get("company") or "").lower().strip(), (j.get("title") or "").lower().strip(),
+           (j.get("url") or "").split("?")[0])
     unique[key] = j
 
-# --- assess + persist ---
-# If the user uploaded a CV and approved some extracted keywords, score
-# against a COPY of the config with those keywords merged into the profile
-# - config.yaml on disk is never modified, and nothing about the CV is
-# persisted anywhere (session-only, per cv_parser.py's own docstring).
+# --- scoring (CV keywords merged into a copy of the config, never written to disk) ---
 EFFECTIVE_CFG = CFG
-cv_keywords_accepted = st.session_state.get("cv_keywords_accepted", [])
-if cv_keywords_accepted:
+cv_kw = st.session_state.get("cv_keywords_accepted", [])
+if cv_kw:
     EFFECTIVE_CFG = dict(CFG)
-    EFFECTIVE_CFG["profile"] = cv_parser.build_augmented_profile(CFG["profile"], cv_keywords_accepted)
-    st.caption(f"🎯 Matching arricchito con {len(cv_keywords_accepted)} parole chiave dal tuo CV.")
+    EFFECTIVE_CFG["profile"] = cv_parser.build_augmented_profile(CFG["profile"], cv_kw)
 
-assessed, filtered_out, diagnostics = [], [], []
+assessed, filtered_out, geo_excluded, diagnostics = [], [], [], []
 watchlist = EFFECTIVE_CFG.get("watchlist_companies", [])
 for j in unique.values():
     try:
         result = scoring.assess(j, EFFECTIVE_CFG, watchlist_companies=watchlist)
     except Exception as e:
-        result = {"title": j.get("title"), "company": j.get("company"), "filtered_out_reason": f"errore di valutazione: {e}", "priority": None}
-        filtered_out.append(result)
+        filtered_out.append({"title": j.get("title"), "company": j.get("company"),
+                             "filtered_out_reason": f"errore di valutazione: {e}"})
         diagnostics.append({"source": j.get("source"), "title": j.get("title"), "company": j.get("company"),
-                             "fields_received": [], "fields_missing": [], "score_before_hard_filters": None,
-                             "hard_filters_passed": False, "hard_filters_failed": ["exception during scoring"],
-                             "classification": "PARSING_FAILURE", "exclusion_reason": str(e), "confidence": "Low", "rejection_tags": []})
+                            "fields_missing": [], "score_before_hard_filters": None, "hard_filters_passed": False,
+                            "classification": "PARSING_FAILURE", "exclusion_reason": str(e),
+                            "confidence": "Low", "rejection_tags": []})
         continue
     diagnostics.append(scoring.diagnose(j, result))
     if result.get("priority") is None:
         filtered_out.append(result)
-    else:
-        if result["score"] < threshold and result["priority"] not in ("STRATEGIC_INTERNSHIP", "HIGH_VALUE_PART_TIME"):
-            result["penalties"] = result.get("penalties", []) + [f"punteggio {result['score']}% sotto la soglia visualizzata ({threshold}%)"]
-            filtered_out.append(result)
-            continue
-        job_id = db.upsert_job(j, result["priority"], result["score"])
-        result["job_id"] = job_id
-        result["source_url"] = j.get("url")
-        assessed.append(result)
+        continue
 
-db.log_refresh(len(jobs), len(assessed), len(filtered_out), len(st.session_state.get("errors", [])))
+    geo = geo_check(j, result)
+    result["geo"] = geo
+    result["location"] = j.get("location") or ""
+    result["source_url"] = j.get("url")
+    if not geo["eligible"]:
+        result["filtered_out_reason"] = geo["reason"]
+        geo_excluded.append(result)
+        continue
+    if result["score"] < threshold and result["priority"] not in ("STRATEGIC_INTERNSHIP", "HIGH_VALUE_PART_TIME"):
+        result["filtered_out_reason"] = f"Compatibilità {result['score']}% sotto la soglia del {threshold}%"
+        filtered_out.append(result)
+        continue
+    result["job_id"] = db.upsert_job(j, result["priority"], result["score"])
+    assessed.append(result)
+
+db.log_refresh(len(jobs), len(assessed), len(filtered_out) + len(geo_excluded), len(st.session_state.get("errors", [])))
 
 status_map = db.get_status_map()
 today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -424,185 +593,176 @@ for r in assessed:
     r["notes"] = row.get("notes", "")
     r["date_first_seen"] = row.get("date_first_seen", today)
 
-if st.session_state.get("errors"):
-    with st.expander(f"⚠️ Avvisi connettori ({len(st.session_state['errors'])})"):
-        for e in st.session_state["errors"]:
-            st.warning(e)
 
 # ---------------------------------------------------------------------------
-# rendering helpers
+# Rendering
 # ---------------------------------------------------------------------------
-def render_card(r, show_status_actions=True):
-    badge_label, badge_class = PRIORITY_BADGES.get(r["priority"], (r["priority"] or "", "badge-silver"))
+BADGES = {
+    "DIAMOND": ("💎 Diamond", "b-diamond"), "POTENTIAL_DIAMOND": ("💎 Potential", "b-diamond b-pot"),
+    "GOLD": ("🥇 Gold", "b-gold"), "POTENTIAL_GOLD": ("🥇 Potential", "b-gold b-pot"),
+    "SILVER": ("🥈 Silver", "b-silver"), "POTENTIAL_SILVER": ("🥈 Potential", "b-silver b-pot"),
+    "STRATEGIC_INTERNSHIP": ("🎓 Stage", "b-intern"), "HIGH_VALUE_PART_TIME": ("⏱️ Part-time", "b-part"),
+}
+STATUS_LABELS = {"new": "Nuovo", "saved": "Salvato", "applied": "Candidato", "interviewing": "Colloquio",
+                 "rejected": "Rifiutato", "archived": "Archiviato"}
+
+
+def where_label(r):
+    w = r.get("geo", {}).get("where", set())
+    loc = (r.get("location") or "").strip()
+    if "ch" in w:
+        return "🇨🇭 " + (loc or "Svizzera")
+    if "it" in w:
+        return "🇮🇹 " + (loc or "Italia")
+    if "remote" in w:
+        return "🌍 Remoto" + (f" · {loc}" if loc and loc.lower() not in ("remote", "anywhere") else "")
+    return loc
+
+
+def useful(v):
+    v = (v or "").strip()
+    return v and not any(x in v.lower() for x in ("not disclosed", "not clearly stated", "n/d", "unknown"))
+
+
+def render_card(r):
+    label, cls = BADGES.get(r["priority"], (r["priority"] or "", "b-silver"))
     with st.container(border=True):
-        st.markdown(f'<span class="badge {badge_class}">{badge_label}</span> <span class="badge badge-band">{r.get("band","")} · {r.get("score","?")}%</span>', unsafe_allow_html=True)
-        st.markdown(f"**{r.get('title','')}** — {r.get('company','')}")
-        st.caption(f"Fonte: {r.get('source','')} · Confidenza: {r.get('confidence','')} · Pubblicato: {r.get('published_at') or 'n/d'}")
-        st.write(f"**Esperienza richiesta:** {r.get('experience_required','')}")
-        st.write(f"**Remote scope:** {r.get('remote_scope','')}")
-        st.write(f"**Restrizioni geografiche:** {r.get('country_restrictions','')}")
-        st.write(f"**Compenso:** {r.get('compensation','')}" + ("" if r.get("compensation_guaranteed") else "  \n_(non garantito/annualizzato automaticamente)_"))
-        st.write(f"**Tipo di contratto:** {r.get('contract_type','')}")
-        if r.get("is_watchlisted"):
-            st.info("🏷️ Azienda nella watchlist — verificare comunque la singola vacancy per la reale politica di remote/ufficio.")
-        if r.get("mandatory_found"):
-            st.markdown("**Condizioni obbligatorie riscontrate:** " + "; ".join(r["mandatory_found"]))
-        if r.get("preferred_found"):
-            st.markdown("**Condizioni preferenziali riscontrate:** " + "; ".join(r["preferred_found"]))
-        if r.get("reasons"):
-            st.caption("Motivi del punteggio: " + " · ".join(r["reasons"]))
-        if r.get("penalties"):
-            st.caption("⚠️ " + " · ".join(r["penalties"]))
+        st.markdown(f'<span class="badge {cls}">{label}</span><span class="score">{r.get("score", "?")}%</span>',
+                    unsafe_allow_html=True)
+        st.markdown(f"**{r.get('title', '')}**  \n{r.get('company', '')}")
+        meta = [where_label(r)]
+        if useful(r.get("compensation")):
+            meta.append(r["compensation"])
+        if r.get("published_at"):
+            meta.append(str(r["published_at"])[:10])
+        st.caption(" · ".join(m for m in meta if m))
+        if r.get("geo", {}).get("unverified"):
+            st.markdown('<span class="flag">📍 Paesi ammessi non indicati: verifica nell\'annuncio</span>',
+                        unsafe_allow_html=True)
+
+        c1, c2 = st.columns([3, 2])
         if r.get("source_url"):
-            st.link_button("Apri vacancy originale ↗", r["source_url"], use_container_width=True)
-        summary = (f"{r.get('title')} — {r.get('company')} | {badge_label} | Fit {r.get('score')}% ({r.get('band')}) | "
-                   f"{r.get('experience_required')} | {r.get('compensation')} | {r.get('remote_scope')} | {r.get('source_url')}")
-        with st.expander("📋 Copia riepilogo posizione"):
-            st.code(summary, language=None)
-        if show_status_actions and r.get("job_id"):
-            cols = st.columns(2)
-            new_status = cols[0].selectbox("Stato", db.VALID_STATUSES, index=db.VALID_STATUSES.index(r.get("status", "new")), key=f"status_{r['job_id']}")
-            if new_status != r.get("status"):
-                db.set_status(r["job_id"], new_status)
-                st.rerun()
-            notes = cols[1].text_input("Note", value=r.get("notes", ""), key=f"notes_{r['job_id']}")
+            c1.link_button("Apri annuncio ↗", r["source_url"])
+        statuses = list(db.VALID_STATUSES)
+        cur = r.get("status", "new")
+        new_status = c2.selectbox("Stato", statuses, index=statuses.index(cur) if cur in statuses else 0,
+                                  format_func=lambda s: STATUS_LABELS.get(s, s),
+                                  key=f"status_{r['job_id']}", label_visibility="collapsed")
+        if new_status != cur:
+            db.set_status(r["job_id"], new_status)
+            st.rerun()
+
+        with st.expander("Dettagli"):
+            rows = [("Esperienza", r.get("experience_required")), ("Contratto", r.get("contract_type")),
+                    ("Remoto", r.get("remote_scope")), ("Fonte", r.get("source"))]
+            for k, v in rows:
+                if useful(v):
+                    st.markdown(f"**{k}:** {v}")
+            if r.get("reasons"):
+                st.markdown("**Perché è compatibile:** " + " · ".join(r["reasons"]))
+            if r.get("penalties"):
+                st.markdown("**Punti deboli:** " + " · ".join(r["penalties"]))
+            notes = st.text_input("Note", value=r.get("notes", ""), key=f"notes_{r['job_id']}")
             if notes != r.get("notes", ""):
                 db.set_notes(r["job_id"], notes)
 
 
-def render_filtered_row(r):
-    with st.container(border=True):
-        st.markdown(f"**{r.get('title') or '(titolo non disponibile)'}** — {r.get('company') or ''}")
-        st.caption(r.get("filtered_out_reason", ""))
+def render_excluded(r):
+    st.markdown(f"**{r.get('title') or '(senza titolo)'}** · {r.get('company') or ''}  \n"
+                f"<span style='color:#64748b;font-size:0.85rem'>{r.get('filtered_out_reason', '')}</span>",
+                unsafe_allow_html=True)
 
 
-# ---------------------------------------------------------------------------
-# metrics + CSV export
-# ---------------------------------------------------------------------------
-c1, c2, c3 = st.columns(3)
-c1.metric("Raccolte", len(jobs))
-c2.metric("Valutate", len(assessed))
-c3.metric("Escluse", len(filtered_out))
-st.caption(f"Duplicati rimossi in questo aggiornamento: {duplicates_removed}")
+# --- filtering for the main list ---
+allowed_priorities = set()
+for t in tiers:
+    for p in TIERS[t]:
+        allowed_priorities.add(p)
+        if include_potential and p in ("DIAMOND", "GOLD", "SILVER"):
+            allowed_priorities.add("POTENTIAL_" + p)
 
-if assessed:
-    df = pd.DataFrame([{k: r.get(k) for k in ["title", "company", "source", "priority", "score", "band", "confidence",
-                                                 "experience_required", "compensation", "remote_scope", "contract_type",
-                                                 "status", "source_url"]} for r in assessed])
-    csv_bytes = df.to_csv(index=False).encode("utf-8")
-    st.download_button("⬇️ Esporta CSV", csv_bytes, file_name="daniele_job_radar_export.csv", mime="text/csv", use_container_width=True)
-
-# ---------------------------------------------------------------------------
-# section selector (single dropdown -> no horizontal scrolling, phone-friendly)
-# ---------------------------------------------------------------------------
-def count(pred):
-    return sum(1 for r in assessed if pred(r))
+WHERE_KEY = {"🌍 Remoto": "remote", "🇨🇭 Svizzera": "ch", "🇮🇹 Italia": "it"}
 
 
-watchlist_not_qualified = [r for r in filtered_out if r.get("is_watchlisted")]
-experience_to_verify = [r for r in assessed if "not clearly stated" in (r.get("experience_required") or "")]
-parsing_failures = [d for d in diagnostics if d["classification"] == "PARSING_FAILURE"]
-parsing_failures += [{"source": r.get("source"), "title": r.get("title"), "company": "",
-                       "exclusion_reason": r.get("description")} for r in st.session_state.get("eml_parsing_failures", [])]
-parsing_failures += [{"source": r.get("source"), "title": r.get("title"), "company": "",
-                       "exclusion_reason": r.get("description")} for r in st.session_state.get("gmail_parsing_failures", [])]
+def visible(r):
+    if r["priority"] not in allowed_priorities:
+        return False
+    if only_today and r.get("date_first_seen") != today:
+        return False
+    k = WHERE_KEY.get(where_choice)
+    return not k or k in r["geo"]["where"]
 
-sections = {
-    f"🆕 New Today ({count(lambda r: r.get('date_first_seen') == today)})": lambda: [r for r in assessed if r.get("date_first_seen") == today],
-    f"💎 Diamond ({count(lambda r: r['priority']=='DIAMOND' and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if r["priority"] == "DIAMOND" and r["status"] in ("new", "saved")],
-    f"💎 Potential Diamond ({count(lambda r: r['priority']=='POTENTIAL_DIAMOND' and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if r["priority"] == "POTENTIAL_DIAMOND" and r["status"] in ("new", "saved")],
-    f"🥇 Gold ({count(lambda r: r['priority']=='GOLD' and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if r["priority"] == "GOLD" and r["status"] in ("new", "saved")],
-    f"🥇 Potential Gold ({count(lambda r: r['priority']=='POTENTIAL_GOLD' and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if r["priority"] == "POTENTIAL_GOLD" and r["status"] in ("new", "saved")],
-    f"🥈 Silver ({count(lambda r: r['priority']=='SILVER' and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if r["priority"] == "SILVER" and r["status"] in ("new", "saved")],
-    f"🥈 Potential Silver ({count(lambda r: r['priority']=='POTENTIAL_SILVER' and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if r["priority"] == "POTENTIAL_SILVER" and r["status"] in ("new", "saved")],
-    f"🎓 Strategic Internships ({count(lambda r: r['priority']=='STRATEGIC_INTERNSHIP')})": lambda: [r for r in assessed if r["priority"] == "STRATEGIC_INTERNSHIP"],
-    f"⏱️ High-Value Part-Time ({count(lambda r: r['priority']=='HIGH_VALUE_PART_TIME')})": lambda: [r for r in assessed if r["priority"] == "HIGH_VALUE_PART_TIME"],
-    f"🏷️ Company Watchlist ({count(lambda r: r.get('is_watchlisted') and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if r.get("is_watchlisted") and r["status"] in ("new", "saved")],
-    f"🏷️ Watchlist Matches, Not Qualified ({len(watchlist_not_qualified)})": None,
-    f"💰 Salary Not Disclosed ({count(lambda r: r.get('compensation')=='Salary not disclosed' and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if r.get("compensation") == "Salary not disclosed" and r["status"] in ("new", "saved")],
-    f"📍 Remote Scope to Verify ({count(lambda r: 'requires confirmation' in (r.get('remote_scope') or '') and r['status'] in ('new','saved'))})": lambda: [r for r in assessed if "requires confirmation" in (r.get("remote_scope") or "") and r["status"] in ("new", "saved")],
-    f"🧭 Experience to Verify ({len(experience_to_verify)})": lambda: experience_to_verify,
-    f"✅ Applied ({count(lambda r: r['status']=='applied')})": lambda: [r for r in assessed if r["status"] == "applied"],
-    f"🗣️ Interviewing ({count(lambda r: r['status']=='interviewing')})": lambda: [r for r in assessed if r["status"] == "interviewing"],
-    f"❌ Rejected ({count(lambda r: r['status']=='rejected')})": lambda: [r for r in assessed if r["status"] == "rejected"],
-    f"📦 Archived ({count(lambda r: r['status']=='archived')})": lambda: [r for r in assessed if r["status"] == "archived"],
-    f"🚫 Filtered Out with Reasons ({len(filtered_out)})": "filtered",
-    f"🔌 Connector Status ({len(st.session_state.get('statuses', []))})": "connector_status",
-    f"⚠️ Parsing Failures ({len(parsing_failures)})": "parsing_failures",
-    f"🩺 Diagnostic Report ({len(diagnostics)})": "diagnostic",
-}
 
-section_name = st.selectbox("Sezione", list(sections.keys()))
-st.divider()
+to_review = sorted([r for r in assessed if r["status"] in ("new", "saved") and visible(r)],
+                   key=lambda r: r.get("score", 0), reverse=True)
+pipeline = [r for r in assessed if r["status"] in ("applied", "interviewing", "rejected", "archived")]
 
-target = sections[section_name]
+summary = f"{len(to_review)} da vedere · {len(pipeline)} candidature"
+if geo_excluded:
+    summary += f" · {len(geo_excluded)} nascoste perché limitate ad altri paesi"
+if st.session_state.get("refreshed_at"):
+    summary += f" · aggiornato alle {st.session_state['refreshed_at']}"
+st.caption(summary)
 
-if target == "filtered":
-    if not filtered_out:
-        st.caption("Nessuna posizione esclusa in questa sessione.")
-    else:
-        for r in filtered_out:
-            render_filtered_row(r)
-elif section_name.startswith("🏷️ Watchlist Matches"):
-    if not watchlist_not_qualified:
-        st.caption("Nessuna azienda in watchlist con vacancy non qualificata in questa sessione.")
-    for r in watchlist_not_qualified:
-        render_filtered_row(r)
-elif target == "connector_status":
-    st.caption("Distingue: successo/zero risultati, fallito, non configurato, non supportato, rate-limited. "
-               "Zero risultati NON è automaticamente prova che un connettore funzioni.")
-    rows = st.session_state.get("statuses", [])
-    if rows:
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    last = db.last_refresh()
-    if last:
-        st.caption(f"Ultimo refresh: {last['ts']} · raccolte {last['total_collected']} · valutate {last['total_assessed']} · escluse {last['total_filtered']} · errori {last['errors_count']}")
-elif target == "parsing_failures":
-    if not parsing_failures:
-        st.caption("Nessun errore di parsing in questa sessione.")
-    for d in parsing_failures:
-        with st.container(border=True):
-            st.markdown(f"**{d.get('title') or '(n/d)'}** — {d.get('company') or ''} ({d.get('source') or ''})")
-            st.caption(d.get("exclusion_reason", ""))
-elif target == "diagnostic":
-    st.caption("Una riga per ogni posizione raccolta: fonte, campi ricevuti/mancanti, punteggio pre-filtri, "
-               "filtri obbligatori superati/falliti, classificazione, motivo di esclusione, confidenza.")
-    if diagnostics:
-        rows = [{
-            "source": d["source"], "title": d["title"], "company": d["company"],
-            "fields_missing": ", ".join(d["fields_missing"]),
-            "score_pre_filters": d["score_before_hard_filters"],
-            "hard_filters_passed": d["hard_filters_passed"],
-            "classification": d["classification"], "exclusion_reason": d["exclusion_reason"],
-            "confidence": d["confidence"], "rejection_tags": ", ".join(d["rejection_tags"]),
-        } for d in diagnostics]
-        df_diag = pd.DataFrame(rows)
-        st.dataframe(df_diag, use_container_width=True, hide_index=True)
-        st.download_button("⬇️ Esporta diagnostica CSV", df_diag.to_csv(index=False).encode("utf-8"),
-                            file_name="diagnostic_report.csv", mime="text/csv", use_container_width=True)
-        st.markdown("**Riepilogo motivi di esclusione:**")
-        tag_counts = {}
-        for d in diagnostics:
-            for t in d["rejection_tags"]:
-                tag_counts[t] = tag_counts.get(t, 0) + 1
-        if tag_counts:
-            st.dataframe(pd.DataFrame(sorted(tag_counts.items(), key=lambda x: -x[1]), columns=["motivo", "conteggio"]),
-                         use_container_width=True, hide_index=True)
-else:
-    rows = target()
-    rows = sorted(rows, key=lambda r: r.get("score", 0), reverse=True)
-    if not rows:
-        st.info("Nessuna posizione in questa sezione al momento. Prova ad abbassare la soglia di compatibilità, "
-                "controlla 'Connector Status' per vedere se una fonte ha fallito, o guarda 'Filtered Out with Reasons'.")
-    for r in rows[:150]:
+VIEWS = ["Da vedere", "Candidature", "Escluse", "Stato fonti"]
+view = chips("Vista", VIEWS, VIEWS[0], key="view", single=True, hide_label=True) or VIEWS[0]
+
+if view == VIEWS[0]:
+    if not to_review:
+        if where_choice == "🇨🇭 Svizzera" and not swiss_sources_available:
+            st.info("Nessuna fonte svizzera attiva. Aggiungi la chiave gratuita Adzuna (developer.adzuna.com) "
+                    "nei Secrets di Streamlit come ADZUNA_APP_ID e ADZUNA_APP_KEY, poi premi Aggiorna.")
+        else:
+            st.info("Nessuna posizione con questi filtri. Prova ad abbassare la compatibilità minima o ad "
+                    "aggiungere ruoli.")
+    for r in to_review[:150]:
+        render_card(r)
+    if to_review:
+        df = pd.DataFrame([{"titolo": r.get("title"), "azienda": r.get("company"), "dove": where_label(r),
+                            "livello": r.get("priority"), "compatibilità": r.get("score"),
+                            "stipendio": r.get("compensation"), "link": r.get("source_url")} for r in to_review])
+        st.download_button("⬇️ Esporta CSV", df.to_csv(index=False).encode("utf-8"),
+                           file_name="job_radar.csv", mime="text/csv")
+
+elif view == VIEWS[1]:
+    if not pipeline:
+        st.info("Qui compaiono le posizioni che segni come Candidato, Colloquio, Rifiutato o Archiviato.")
+    order = {"interviewing": 0, "applied": 1, "rejected": 2, "archived": 3}
+    for r in sorted(pipeline, key=lambda r: order.get(r["status"], 9)):
         render_card(r)
 
-st.divider()
-st.caption(
-    "Fonti aggregatore: Himalayas, Arbeitnow, Remotive, We Work Remotely (RSS), The Muse, Remote OK"
-    + (", Adzuna" if connectors.adzuna_configured() else "")
-    + (", Jooble" if (connectors.jooble_configured('it') or connectors.jooble_configured('ch')) else "")
-    + ". Connettori aziendali diretti (watchlist): Greenhouse/Lever/Ashby dove configurato in config.yaml. "
-      "Lo scoring è euristico e i requisiti obbligatori non vengono mai superati da un punteggio alto. "
-      "Nessuna informazione mancante viene inventata: quando manca, viene esplicitamente segnalata."
-)
+elif view == VIEWS[2]:
+    if geo_excluded:
+        st.markdown(f"**Limitate ad altri paesi ({len(geo_excluded)})**")
+        for r in geo_excluded:
+            render_excluded(r)
+    if filtered_out:
+        st.markdown(f"**Non compatibili ({len(filtered_out)})**")
+        for r in filtered_out[:300]:
+            render_excluded(r)
+
+else:
+    rows = st.session_state.get("statuses", [])
+    if rows:
+        df_s = pd.DataFrame(rows)
+        failed = df_s[df_s["stato"] == "errore"]
+        st.caption(f"{len(df_s)} fonti interrogate · {len(failed)} con errori")
+        st.dataframe(df_s, hide_index=True)
+    parsing_failures = [d for d in diagnostics if d.get("classification") == "PARSING_FAILURE"]
+    parsing_failures += st.session_state.get("eml_parsing_failures", []) + st.session_state.get("gmail_parsing_failures", [])
+    if parsing_failures:
+        with st.expander(f"Annunci non leggibili ({len(parsing_failures)})"):
+            for d in parsing_failures:
+                st.markdown(f"- {d.get('title') or '(n/d)'} · {d.get('source') or ''}: "
+                            f"{d.get('exclusion_reason') or d.get('description') or ''}")
+    if diagnostics:
+        with st.expander("Diagnostica completa"):
+            df_d = pd.DataFrame([{
+                "fonte": d.get("source"), "titolo": d.get("title"), "azienda": d.get("company"),
+                "classificazione": d.get("classification"), "motivo": d.get("exclusion_reason"),
+                "punteggio": d.get("score_before_hard_filters"),
+                "tag": ", ".join(d.get("rejection_tags") or []),
+            } for d in diagnostics])
+            st.dataframe(df_d, hide_index=True)
+            st.download_button("⬇️ Esporta diagnostica", df_d.to_csv(index=False).encode("utf-8"),
+                               file_name="diagnostica.csv", mime="text/csv")
