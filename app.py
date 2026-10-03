@@ -329,9 +329,6 @@ with st.expander("🔎 Ruoli e fonti"):
                    "(ADZUNA_APP_ID / ADZUNA_APP_KEY) o Jooble (JOOBLE_API_KEY_CH) nei Secrets di Streamlit.")
 
 with st.expander("⚙️ Filtri"):
-    TIERS = {"💎 Diamond": ["DIAMOND"], "🥇 Gold": ["GOLD"], "🥈 Silver": ["SILVER"],
-             "🎓 Stage": ["STRATEGIC_INTERNSHIP"], "⏱️ Part-time": ["HIGH_VALUE_PART_TIME"]}
-    tiers = chips("Livello", list(TIERS), list(TIERS), key="tiers")
     include_potential = st.toggle("Includi i 'Potential'", value=True)
     only_today = st.toggle("Solo nuovi di oggi", value=False)
     threshold = st.slider("Compatibilità minima", 0, 100, 45, step=5, format="%d%%")
@@ -674,18 +671,21 @@ def render_excluded(r):
 
 
 # --- filtering for the main list ---
-allowed_priorities = set()
-for t in tiers:
-    for p in TIERS[t]:
-        allowed_priorities.add(p)
-        if include_potential and p in ("DIAMOND", "GOLD", "SILVER"):
-            allowed_priorities.add("POTENTIAL_" + p)
-
+TIER_GROUPS = [
+    ("💎 Diamond", ["DIAMOND", "POTENTIAL_DIAMOND"]),
+    ("🥇 Gold", ["GOLD", "POTENTIAL_GOLD"]),
+    ("🥈 Silver", ["SILVER", "POTENTIAL_SILVER"]),
+    ("🎓 Stage", ["STRATEGIC_INTERNSHIP"]),
+    ("⏱️ Part-time", ["HIGH_VALUE_PART_TIME"]),
+]
+TIER_OF = {p: name for name, ps in TIER_GROUPS for p in ps}
 WHERE_KEY = {"🌍 Remoto": "remote", "🇨🇭 Svizzera": "ch", "🇮🇹 Italia": "it"}
 
 
 def visible(r):
-    if r["priority"] not in allowed_priorities:
+    if r["priority"] not in TIER_OF:
+        return False
+    if not include_potential and r["priority"].startswith("POTENTIAL_"):
         return False
     if only_today and r.get("date_first_seen") != today:
         return False
@@ -704,7 +704,7 @@ if st.session_state.get("refreshed_at"):
     summary += f" · aggiornato alle {st.session_state['refreshed_at']}"
 st.caption(summary)
 
-VIEWS = ["Da vedere", "Candidature", "Escluse", "Stato fonti"]
+VIEWS = ["Da vedere", "Candidature", "Escluse", "🔌 Connettori"]
 view = chips("Vista", VIEWS, VIEWS[0], key="view", single=True, hide_label=True) or VIEWS[0]
 
 if view == VIEWS[0]:
@@ -715,9 +715,19 @@ if view == VIEWS[0]:
         else:
             st.info("Nessuna posizione con questi filtri. Prova ad abbassare la compatibilità minima o ad "
                     "aggiungere ruoli.")
-    for r in to_review[:150]:
-        render_card(r)
-    if to_review:
+    else:
+        groups = {name: [r for r in to_review if TIER_OF[r["priority"]] == name] for name, _ in TIER_GROUPS}
+        tier_labels = ["Tutti"] + [name for name, _ in TIER_GROUPS if groups[name]]
+        st.caption("  ·  ".join(f"{name} **{len(groups[name])}**" for name, _ in TIER_GROUPS if groups[name]))
+        tier_choice = chips("Livello", tier_labels, "Tutti", key="tier_view", single=True, hide_label=True) or "Tutti"
+        shown = 0
+        for name, _ in TIER_GROUPS:
+            if tier_choice not in ("Tutti", name) or not groups[name]:
+                continue
+            st.subheader(f"{name} · {len(groups[name])}")
+            for r in groups[name][:max(0, 150 - shown)]:
+                render_card(r)
+            shown += len(groups[name])
         df = pd.DataFrame([{"titolo": r.get("title"), "azienda": r.get("company"), "dove": where_label(r),
                             "livello": r.get("priority"), "compatibilità": r.get("score"),
                             "stipendio": r.get("compensation"), "link": r.get("source_url")} for r in to_review])
@@ -743,11 +753,59 @@ elif view == VIEWS[2]:
 
 else:
     rows = st.session_state.get("statuses", [])
+    agg = {}
+    for row in rows:
+        name = row["fonte"].split(" · ")[0]
+        if "(unconfigured)" in name:
+            continue  # aziende in watchlist senza pagina carriere configurata: non sono connettori
+        a = agg.setdefault(name, {"annunci": 0, "ok": 0, "zero": 0, "err": 0, "errore": None})
+        a["annunci"] += row.get("annunci") or 0
+        if row["stato"] in ("errore", "failed", "failed_or_unsupported") or row.get("errore"):
+            a["err"] += 1
+            a["errore"] = a["errore"] or row.get("errore")
+        elif row.get("annunci"):
+            a["ok"] += 1
+        else:
+            a["zero"] += 1
+    table = []
+    for name, a in agg.items():
+        if a["err"] and not a["ok"]:
+            icon, stato = "❌", "Non funziona"
+        elif a["err"]:
+            icon, stato = "⚠️", "Funziona in parte"
+        elif a["annunci"]:
+            icon, stato = "✅", "Funziona"
+        else:
+            icon, stato = "⚪", "Nessun annuncio trovato"
+        table.append({"": icon, "connettore": name, "stato": stato, "annunci": a["annunci"],
+                      "dettaglio": (a["errore"] or "")[:160]})
+    queried = set(agg)
+    NOT_CONFIGURED = [
+        ("Adzuna Svizzera", adzuna_ch_configured(), "Aggiungi ADZUNA_APP_ID e ADZUNA_APP_KEY nei Secrets"),
+        ("Adzuna", connectors.adzuna_configured(), "Aggiungi ADZUNA_APP_ID e ADZUNA_APP_KEY nei Secrets"),
+        ("Jooble Italia", connectors.jooble_configured("it"), "Aggiungi la chiave Jooble Italia nei Secrets"),
+        ("Jooble Svizzera", connectors.jooble_configured("ch"), "Aggiungi JOOBLE_API_KEY_CH nei Secrets"),
+        ("Gmail", gmail_ok, "Collega Gmail dalla sezione 📧 Gmail"),
+    ]
+    for name, ok, how in NOT_CONFIGURED:
+        if not ok and name not in queried:
+            table.append({"": "🔌", "connettore": name, "stato": "Non configurato", "annunci": 0, "dettaglio": how})
+    if table:
+        order = {"❌": 0, "⚠️": 1, "⚪": 2, "✅": 3, "🔌": 4}
+        table.sort(key=lambda t: (order[t[""]], -t["annunci"]))
+        n_ok = sum(t[""] == "✅" for t in table)
+        n_bad = sum(t[""] in ("❌", "⚠️") for t in table)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Funzionano", n_ok)
+        c2.metric("Con errori", n_bad)
+        c3.metric("Annunci raccolti", sum(t["annunci"] for t in table))
+        st.dataframe(pd.DataFrame(table), hide_index=True)
+        st.caption("⚪ significa che la fonte risponde ma non ha annunci per questi ruoli: non è per forza un guasto.")
+    else:
+        st.info("Premi 🔄 Aggiorna per controllare i connettori.")
     if rows:
-        df_s = pd.DataFrame(rows)
-        failed = df_s[df_s["stato"] == "errore"]
-        st.caption(f"{len(df_s)} fonti interrogate · {len(failed)} con errori")
-        st.dataframe(df_s, hide_index=True)
+        with st.expander("Dettaglio per singola ricerca"):
+            st.dataframe(pd.DataFrame(rows), hide_index=True)
     parsing_failures = [d for d in diagnostics if d.get("classification") == "PARSING_FAILURE"]
     parsing_failures += st.session_state.get("eml_parsing_failures", []) + st.session_state.get("gmail_parsing_failures", [])
     if parsing_failures:
