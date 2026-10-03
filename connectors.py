@@ -450,12 +450,12 @@ def jooble_configured(market="it"):
     return bool(os.environ.get(key))
 
 
-def fetch_jooble(query="product manager", market="it"):
+def fetch_jooble(query="product manager", market="it", location=None):
     key_env = "JOOBLE_API_KEY_IT" if market == "it" else "JOOBLE_API_KEY_CH"
     api_key = os.environ.get(key_env)
     if not api_key:
         raise RuntimeError(f"non configurato: imposta {key_env} (vedi .env.example) per attivare Jooble {market.upper()} - quota gratuita limitata, usare con parsimonia")
-    location = "Italy" if market == "it" else "Switzerland"
+    location = location or ("Italy" if market == "it" else "Switzerland")
     body = {"keywords": query, "location": location}
     r = requests.post(f"https://jooble.org/api/{api_key}", json=body, headers={**UA, "Content-Type": "application/json"}, timeout=TIMEOUT)
     r.raise_for_status()

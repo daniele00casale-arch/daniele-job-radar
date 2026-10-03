@@ -105,20 +105,48 @@ def secret(name):
 # ---------------------------------------------------------------------------
 OK_IT = "Italia"
 OK_CH = "Svizzera"
+OK_CH_GENERIC = "Svizzera (sede da verificare)"
+CH_OUT = "Svizzera fuori dal Ticino"
 OK_EU = "Europa/UE"
 OK_WORLD = "Ovunque"
-ALLOWED = {OK_IT, OK_CH, OK_EU, OK_WORLD}
+ALLOWED = {OK_IT, OK_CH, OK_CH_GENERIC, OK_EU, OK_WORLD}
+
+# Comuni e località del Canton Ticino (nomi ambigui come "Riviera", "Claro", "Pura" esclusi apposta)
+TICINO_PLACES = [
+    "ticino", "tessin", "tessino", "canton ticino", "cantone ticino",
+    "lugano", "chiasso", "mendrisio", "bellinzona", "locarno", "stabio", "biasca", "ascona", "losone",
+    "balerna", "coldrerio", "novazzano", "vacallo", "morbio", "morbio inferiore", "castel san pietro",
+    "riva san vitale", "capolago", "melano", "maroggia", "bissone", "melide", "arogno", "rovio", "breggia",
+    "genestrerio", "ligornetto", "rancate", "besazio", "arzo", "meride", "brusino",
+    "manno", "bioggio", "agno", "cadempino", "lamone", "vezia", "massagno", "savosa", "porza", "canobbio",
+    "comano", "cureglia", "origlio", "capriasca", "tesserete", "ponte capriasca", "sigirino", "mezzovico",
+    "taverne", "torricella", "bedano", "gravesano", "monteceneri", "camignolo", "bironico",
+    "pregassona", "viganello", "breganzona", "sorengo", "muzzano", "collina d'oro", "montagnola",
+    "gentilino", "grancia", "pambio", "noranco", "barbengo", "figino", "carabbia", "pazzallo",
+    "caslano", "magliaso", "ponte tresa", "monteggio", "croglio", "novaggio", "neggio", "curio",
+    "muralto", "minusio", "gordola", "brissago", "avegno", "maggia", "cevio", "gambarogno", "magadino",
+    "giubiasco", "sant'antonino", "cadenazzo", "camorino", "arbedo", "castione", "lumino", "sementina",
+    "airolo", "faido", "bodio", "giornico", "acquarossa", "blenio", "serravalle", "pollegio",
+]
+CH_OUTSIDE_TICINO = [
+    "zurich", "zürich", "zuerich", "zurigo", "geneva", "genève", "geneve", "ginevra", "basel", "basilea",
+    "bern", "berne", "berna", "lausanne", "losanna", "zug", "zugo", "lucerne", "luzern", "lucerna",
+    "winterthur", "st. gallen", "st gallen", "san gallo", "aarau", "baden", "schaffhausen", "fribourg",
+    "neuchâtel", "neuchatel", "sion", "chur", "coira", "thun", "biel", "bienne", "olten", "solothurn",
+    "schwyz", "frauenfeld", "rapperswil", "wallisellen", "kloten", "dübendorf", "opfikon", "glattbrugg",
+    "schlieren", "baar", "cham", "pfäffikon", "nyon", "vevey", "montreux", "yverdon",
+]
 
 PLACE_TERMS = {
     # allowed
     "italy": OK_IT, "italia": OK_IT, "italian": OK_IT, "milan": OK_IT, "milano": OK_IT, "lombardy": OK_IT,
     "lombardia": OK_IT, "rome": OK_IT, "roma": OK_IT, "turin": OK_IT, "torino": OK_IT, "bologna": OK_IT,
     "genoa": OK_IT, "genova": OK_IT, "como": OK_IT, "varese": OK_IT, "monza": OK_IT, "bergamo": OK_IT,
-    "switzerland": OK_CH, "swiss": OK_CH, "schweiz": OK_CH, "suisse": OK_CH, "svizzera": OK_CH,
-    "ticino": OK_CH, "lugano": OK_CH, "chiasso": OK_CH, "mendrisio": OK_CH, "bellinzona": OK_CH,
-    "locarno": OK_CH, "stabio": OK_CH, "zurich": OK_CH, "zürich": OK_CH, "zuerich": OK_CH, "geneva": OK_CH,
-    "genève": OK_CH, "geneve": OK_CH, "ginevra": OK_CH, "basel": OK_CH, "bern": OK_CH, "berne": OK_CH,
-    "lausanne": OK_CH, "zug": OK_CH, "lucerne": OK_CH, "luzern": OK_CH, "winterthur": OK_CH,
+    # Switzerland: only Canton Ticino counts (generic "Switzerland" is kept but flagged to verify)
+    "switzerland": OK_CH_GENERIC, "swiss": OK_CH_GENERIC, "schweiz": OK_CH_GENERIC,
+    "suisse": OK_CH_GENERIC, "svizzera": OK_CH_GENERIC,
+    **{t: OK_CH for t in TICINO_PLACES},
+    **{t: CH_OUT for t in CH_OUTSIDE_TICINO},
     "europe": OK_EU, "european union": OK_EU, "emea": OK_EU, "eu": OK_EU, "eea": OK_EU, "cet": OK_EU,
     "cest": OK_EU, "european": OK_EU, "europa": OK_EU,
     "worldwide": OK_WORLD, "anywhere": OK_WORLD, "global": OK_WORLD, "globally": OK_WORLD,
@@ -227,7 +255,14 @@ def geo_check(j, r):
                  or "remote" in loc.lower() or OK_WORLD in loc_places)
 
     where = set()
-    if OK_CH in loc_places or OK_CH in title_places:
+    ticino = OK_CH in loc_places or OK_CH in title_places
+    ch_generic = (OK_CH_GENERIC in loc_places or OK_CH_GENERIC in title_places
+                  or (j.get("source") or "").lower().startswith(("adzuna ch", "jooble (ch")))
+    outside = CH_OUT in loc_places and not ticino
+    if outside and not is_remote:
+        return {"eligible": False, "where": set(),
+                "reason": "Svizzera fuori dal Ticino", "unverified": False}
+    if ticino or (ch_generic and not outside):
         where.add("ch")
     if OK_IT in loc_places or OK_IT in title_places:
         where.add("it")
@@ -244,9 +279,10 @@ def geo_check(j, r):
         return {"eligible": True, "where": where, "reason": "",
                 "unverified": not (loc_places & ALLOWED)}
 
-    # on-site / hybrid: only Italy (Lombardy commute) or Switzerland make sense
+    # on-site / hybrid: only Italy (Lombardy commute) or Canton Ticino make sense
     if where & {"ch", "it"}:
-        return {"eligible": True, "where": where, "reason": "", "unverified": False}
+        return {"eligible": True, "where": where, "reason": "",
+                "unverified": "ch" in where and not ticino and "it" not in where}
     if loc_places:
         return {"eligible": False, "where": where,
                 "reason": "In sede a " + ", ".join(sorted(loc_places)), "unverified": False}
@@ -260,11 +296,9 @@ def adzuna_ch_configured():
     return bool(secret("ADZUNA_APP_ID") and secret("ADZUNA_APP_KEY"))
 
 
-def fetch_adzuna_ch(query, where="Svizzera"):
+def fetch_adzuna_ch(query, where="Ticino"):
     params = {"app_id": secret("ADZUNA_APP_ID"), "app_key": secret("ADZUNA_APP_KEY"),
-              "what": query, "results_per_page": 50, "content-type": "application/json"}
-    if where and where != "Svizzera":
-        params["where"] = where
+              "what": query, "where": where, "results_per_page": 50, "content-type": "application/json"}
     resp = requests.get("https://api.adzuna.com/v1/api/jobs/ch/search/1", params=params, timeout=20)
     resp.raise_for_status()
     out = []
@@ -275,7 +309,8 @@ def fetch_adzuna_ch(query, where="Svizzera"):
         out.append({
             "title": it.get("title", ""),
             "company": (it.get("company") or {}).get("display_name", ""),
-            "location": ", ".join((it.get("location") or {}).get("area", [])) or "Switzerland",
+            "location": (it.get("location") or {}).get("display_name")
+                        or ", ".join((it.get("location") or {}).get("area", [])) or "Ticino",
             "description": it.get("description", ""),
             "url": it.get("redirect_url", ""),
             "source": "Adzuna CH",
@@ -303,18 +338,18 @@ optional_sources = []
 if connectors.adzuna_configured():
     optional_sources.append("Adzuna")
 if adzuna_ch_configured():
-    optional_sources.append("Adzuna Svizzera")
+    optional_sources.append("Adzuna Ticino")
 if connectors.jooble_configured("it"):
     optional_sources.append("Jooble Italia")
 if connectors.jooble_configured("ch"):
-    optional_sources.append("Jooble Svizzera")
+    optional_sources.append("Jooble Ticino")
 gmail_ok = GMAIL_MODULE_OK and gmail_connector.gmail_connected()
 if gmail_ok:
     optional_sources.append("Gmail alert")
 all_sources = base_sources + optional_sources
 swiss_sources_available = adzuna_ch_configured() or connectors.jooble_configured("ch")
 
-WHERE_OPTIONS = ["Tutte", "🌍 Remoto", "🇨🇭 Svizzera", "🇮🇹 Italia"]
+WHERE_OPTIONS = ["Tutte", "🌍 Remoto", "🇨🇭 Ticino", "🇮🇹 Italia"]
 where_choice = chips("Dove", WHERE_OPTIONS, "Tutte", key="where", single=True) or "Tutte"
 
 with st.expander("🔎 Ruoli e fonti"):
@@ -325,7 +360,7 @@ with st.expander("🔎 Ruoli e fonti"):
     sources_enabled = chips("Fonti", all_sources, all_sources, key="sources")
     include_ats = st.toggle("Pagine carriere delle aziende in watchlist", value=True)
     if not swiss_sources_available:
-        st.caption("Per gli annunci in Svizzera serve una chiave gratuita Adzuna "
+        st.caption("Per gli annunci in Ticino serve una chiave gratuita Adzuna "
                    "(ADZUNA_APP_ID / ADZUNA_APP_KEY) o Jooble (JOOBLE_API_KEY_CH) nei Secrets di Streamlit.")
 
 with st.expander("⚙️ Filtri"):
@@ -473,12 +508,12 @@ def load(qs, sources, include_ats_flag, ats_directory_json):
             run(f"Remotive · {q}", lambda q=q: connectors.fetch_remotive(q))
         if "Adzuna" in sources:
             run(f"Adzuna · {q}", lambda q=q: connectors.fetch_adzuna(q))
-        if "Adzuna Svizzera" in sources:
-            run(f"Adzuna CH · {q}", lambda q=q: fetch_adzuna_ch(q))
+        if "Adzuna Ticino" in sources:
+            run(f"Adzuna Ticino · {q}", lambda q=q: fetch_adzuna_ch(q))
         if "Jooble Italia" in sources:
             run(f"Jooble IT · {q}", lambda q=q: connectors.fetch_jooble(q, market="it"))
-        if "Jooble Svizzera" in sources:
-            run(f"Jooble CH · {q}", lambda q=q: connectors.fetch_jooble(q, market="ch"))
+        if "Jooble Ticino" in sources:
+            run(f"Jooble Ticino · {q}", lambda q=q: connectors.fetch_jooble(q, market="ch", location="Ticino"))
     if "The Muse" in sources:
         run("The Muse", lambda: connectors.fetch_the_muse(pages=1))
     if "Remote OK" in sources:
@@ -608,7 +643,7 @@ def where_label(r):
     w = r.get("geo", {}).get("where", set())
     loc = (r.get("location") or "").strip()
     if "ch" in w:
-        return "🇨🇭 " + (loc or "Svizzera")
+        return "🇨🇭 " + (loc or "Ticino")
     if "it" in w:
         return "🇮🇹 " + (loc or "Italia")
     if "remote" in w:
@@ -679,7 +714,7 @@ TIER_GROUPS = [
     ("⏱️ Part-time", ["HIGH_VALUE_PART_TIME"]),
 ]
 TIER_OF = {p: name for name, ps in TIER_GROUPS for p in ps}
-WHERE_KEY = {"🌍 Remoto": "remote", "🇨🇭 Svizzera": "ch", "🇮🇹 Italia": "it"}
+WHERE_KEY = {"🌍 Remoto": "remote", "🇨🇭 Ticino": "ch", "🇮🇹 Italia": "it"}
 
 
 def visible(r):
@@ -709,7 +744,7 @@ view = chips("Vista", VIEWS, VIEWS[0], key="view", single=True, hide_label=True)
 
 if view == VIEWS[0]:
     if not to_review:
-        if where_choice == "🇨🇭 Svizzera" and not swiss_sources_available:
+        if where_choice == "🇨🇭 Ticino" and not swiss_sources_available:
             st.info("Nessuna fonte svizzera attiva. Aggiungi la chiave gratuita Adzuna (developer.adzuna.com) "
                     "nei Secrets di Streamlit come ADZUNA_APP_ID e ADZUNA_APP_KEY, poi premi Aggiorna.")
         else:
@@ -781,10 +816,10 @@ else:
                       "dettaglio": (a["errore"] or "")[:160]})
     queried = set(agg)
     NOT_CONFIGURED = [
-        ("Adzuna Svizzera", adzuna_ch_configured(), "Aggiungi ADZUNA_APP_ID e ADZUNA_APP_KEY nei Secrets"),
+        ("Adzuna Ticino", adzuna_ch_configured(), "Aggiungi ADZUNA_APP_ID e ADZUNA_APP_KEY nei Secrets"),
         ("Adzuna", connectors.adzuna_configured(), "Aggiungi ADZUNA_APP_ID e ADZUNA_APP_KEY nei Secrets"),
         ("Jooble Italia", connectors.jooble_configured("it"), "Aggiungi la chiave Jooble Italia nei Secrets"),
-        ("Jooble Svizzera", connectors.jooble_configured("ch"), "Aggiungi JOOBLE_API_KEY_CH nei Secrets"),
+        ("Jooble Ticino", connectors.jooble_configured("ch"), "Aggiungi JOOBLE_API_KEY_CH nei Secrets"),
         ("Gmail", gmail_ok, "Collega Gmail dalla sezione 📧 Gmail"),
     ]
     for name, ok, how in NOT_CONFIGURED:
