@@ -336,11 +336,79 @@ with st.expander("⚙️ Filtri"):
     only_today = st.toggle("Solo nuovi di oggi", value=False)
     threshold = st.slider("Compatibilità minima", 0, 100, 45, step=5, format="%d%%")
 
+with st.expander("📧 Gmail" + (" · connesso" if gmail_ok else " · non connesso"), expanded=not gmail_ok):
+    if not GMAIL_MODULE_OK:
+        st.error("Librerie Gmail mancanti: controlla requirements.txt e riavvia il deploy.")
+    else:
+        msg = st.session_state.pop("gmail_wizard_message", None)
+        if msg:
+            (st.success if msg[0] == "success" else st.error)(msg[1])
+        connected = gmail_connector.gmail_connected()
+        if connected:
+            email = st.session_state.get("gmail_connected_email")
+            if email is None:
+                try:
+                    email = gmail_oauth.connected_email_address()
+                except Exception as e:
+                    email = f"(non verificabile: {e})"
+                st.session_state["gmail_connected_email"] = email
+            st.write(f"Account: **{email}**")
+            if st.button("Disconnetti Gmail"):
+                gmail_connector.disconnect_gmail()
+                st.session_state.pop("gmail_connected_email", None)
+                st.rerun()
+            st.link_button("Revoca accesso su Google ↗", gmail_oauth.REVOKE_URL)
+        else:
+            st.caption("Accesso di sola lettura, dalla pagina ufficiale di Google.")
+            st.markdown("**1. Crea queste etichette in Gmail**")
+            for lbl in gmail_oauth.DEFAULT_LABELS.values():
+                st.code(lbl, language=None)
+            st.link_button("Etichette Gmail ↗", "https://mail.google.com/mail/u/0/#settings/labels")
+
+            st.markdown("**2. Client ID e Secret di Google Cloud**")
+            client_source = gmail_oauth.client_config_source()
+            if client_source in ("streamlit_secrets", "env") or gmail_oauth.has_client_config():
+                st.caption("✅ Configurati.")
+                if client_source not in ("streamlit_secrets", "env") and st.button("Rimuovi credenziali"):
+                    gmail_oauth.clear_client_config()
+                    st.rerun()
+            else:
+                st.link_button("Google Cloud → Credenziali ↗", gmail_oauth.GOOGLE_CLOUD_CREDENTIALS_URL)
+                with st.form("gmail_client_config_form", clear_on_submit=True):
+                    in_id = st.text_input("Client ID")
+                    in_secret = st.text_input("Client Secret", type="password")
+                    if st.form_submit_button("Salva (cifrato)"):
+                        try:
+                            gmail_oauth.save_client_config(in_id, in_secret)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Non salvate: {e}")
+
+            st.markdown("**3. URI di reindirizzamento da autorizzare**")
+            base = gmail_oauth.detect_redirect_base_url()
+            if not base:
+                base = st.text_input("URL dell'app", value=st.session_state.get("gmail_manual_base_url", ""),
+                                     placeholder="https://tuo-progetto.streamlit.app")
+                st.session_state["gmail_manual_base_url"] = base
+            redirect_uri = gmail_oauth.redirect_uri_from_base(base) if base else None
+            if redirect_uri:
+                st.code(redirect_uri, language=None)
+
+            st.markdown("**4. Connetti**")
+            if gmail_oauth.has_client_config() and redirect_uri:
+                try:
+                    auth_url, _ = gmail_oauth.build_authorization_url(redirect_uri)
+                    st.link_button("🔐 Connetti Gmail", auth_url, type="primary")
+                except Exception as e:
+                    st.error(f"Connessione non preparata: {e}")
+            else:
+                st.caption("Completa i passi 2 e 3.")
+
 refresh = st.button("🔄 Aggiorna", type="primary")
 
 
 # ---------------------------------------------------------------------------
-# Settings in the sidebar (CV, Gmail, manual import, privacy)
+# Settings in the sidebar (CV, manual import, privacy)
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.header("Impostazioni")
@@ -368,74 +436,6 @@ with st.sidebar:
                     for k in ("cv_sig", "cv_keywords_found", "cv_keywords_accepted", "cv_error", "cvkw"):
                         st.session_state.pop(k, None)
                     st.rerun()
-
-    with st.expander("📧 Gmail" + (" · connesso" if gmail_ok else "")):
-        if not GMAIL_MODULE_OK:
-            st.error("Librerie Gmail mancanti: controlla requirements.txt e riavvia il deploy.")
-        else:
-            msg = st.session_state.pop("gmail_wizard_message", None)
-            if msg:
-                (st.success if msg[0] == "success" else st.error)(msg[1])
-            connected = gmail_connector.gmail_connected()
-            if connected:
-                email = st.session_state.get("gmail_connected_email")
-                if email is None:
-                    try:
-                        email = gmail_oauth.connected_email_address()
-                    except Exception as e:
-                        email = f"(non verificabile: {e})"
-                    st.session_state["gmail_connected_email"] = email
-                st.write(f"Account: **{email}**")
-                if st.button("Disconnetti Gmail"):
-                    gmail_connector.disconnect_gmail()
-                    st.session_state.pop("gmail_connected_email", None)
-                    st.rerun()
-                st.link_button("Revoca accesso su Google ↗", gmail_oauth.REVOKE_URL)
-            else:
-                st.caption("Accesso di sola lettura, dalla pagina ufficiale di Google.")
-                st.markdown("**1. Crea queste etichette in Gmail**")
-                for lbl in gmail_oauth.DEFAULT_LABELS.values():
-                    st.code(lbl, language=None)
-                st.link_button("Etichette Gmail ↗", "https://mail.google.com/mail/u/0/#settings/labels")
-
-                st.markdown("**2. Client ID e Secret di Google Cloud**")
-                client_source = gmail_oauth.client_config_source()
-                if client_source in ("streamlit_secrets", "env") or gmail_oauth.has_client_config():
-                    st.caption("✅ Configurati.")
-                    if client_source not in ("streamlit_secrets", "env") and st.button("Rimuovi credenziali"):
-                        gmail_oauth.clear_client_config()
-                        st.rerun()
-                else:
-                    st.link_button("Google Cloud → Credenziali ↗", gmail_oauth.GOOGLE_CLOUD_CREDENTIALS_URL)
-                    with st.form("gmail_client_config_form", clear_on_submit=True):
-                        in_id = st.text_input("Client ID")
-                        in_secret = st.text_input("Client Secret", type="password")
-                        if st.form_submit_button("Salva (cifrato)"):
-                            try:
-                                gmail_oauth.save_client_config(in_id, in_secret)
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Non salvate: {e}")
-
-                st.markdown("**3. URI di reindirizzamento da autorizzare**")
-                base = gmail_oauth.detect_redirect_base_url()
-                if not base:
-                    base = st.text_input("URL dell'app", value=st.session_state.get("gmail_manual_base_url", ""),
-                                         placeholder="https://tuo-progetto.streamlit.app")
-                    st.session_state["gmail_manual_base_url"] = base
-                redirect_uri = gmail_oauth.redirect_uri_from_base(base) if base else None
-                if redirect_uri:
-                    st.code(redirect_uri, language=None)
-
-                st.markdown("**4. Connetti**")
-                if gmail_oauth.has_client_config() and redirect_uri:
-                    try:
-                        auth_url, _ = gmail_oauth.build_authorization_url(redirect_uri)
-                        st.link_button("🔐 Connetti Gmail", auth_url, type="primary")
-                    except Exception as e:
-                        st.error(f"Connessione non preparata: {e}")
-                else:
-                    st.caption("Completa i passi 2 e 3.")
 
     with st.expander("📥 Importa alert (.eml)"):
         uploaded = st.file_uploader("Email LinkedIn/Indeed salvate", type=["eml"], accept_multiple_files=True)
