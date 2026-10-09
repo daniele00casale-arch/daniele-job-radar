@@ -242,6 +242,11 @@ watchlist_companies:
   - Jet HR
   - Revolut
   - Kering
+  - Prima
+  - Scalapay
+  - TheFork
+  - ION Group
+  - YouGov
 
 # Per-company ATS wiring for the connectors in ats_connectors.py (spec
 # section 5/6). Only entries with a `board_token`/`site_id`/`job_board_name`
@@ -293,6 +298,25 @@ ats_directory:
   Jet HR: {ats: unconfigured}
   Revolut: {ats: unconfigured}
   Kering: {ats: unconfigured}
+  # Added 2026-10-09: Milan/Italy product companies with public boards (URLs seen on their career pages)
+  Prima:            # jobs.eu.lever.co/prima - has Junior / Product Manager roles in Milan
+    ats: lever
+    site_id: prima
+    eu: true
+  Scalapay:         # job-boards.eu.greenhouse.io/scalapaysrl
+    ats: greenhouse
+    board_token: scalapaysrl
+    eu: true
+  TheFork:          # job-boards.greenhouse.io/thefork (Milan / Paris)
+    ats: greenhouse
+    board_token: thefork
+  ION Group:        # jobs.lever.co/ion - Product Analyst/Associate roles in Italy
+    ats: lever
+    site_id: ion
+  YouGov:           # job-boards.eu.greenhouse.io/yougov (Milan office)
+    ats: greenhouse
+    board_token: yougov
+    eu: true
 
 scoring:
   # Percent weights, must sum to 100.
@@ -353,6 +377,33 @@ title_gate:
     - operations analyst
     - data analyst
     - insights analyst
+    - junior product
+    - associate product
+    # Italian titles (Ticino / Italy ads are often written in Italian)
+    - responsabile prodotto
+    - responsabile di prodotto
+    - specialista prodotto
+    - specialista di prodotto
+    - gestione prodotto
+    - analista business
+    - analista di business
+    - analista dati
+    - analista di processo
+    - analista funzionale
+    - specialista marketing
+    - marketing specialist
+    - digital marketing
+    - trasformazione digitale
+    - innovazione
+    - digitalizzazione
+    - progetti digitali
+    - project manager junior
+    # German titles (Swiss ads)
+    - produktmanager
+    - produktmanagerin
+    - produkt manager
+    - produktverantwortlicher
+    - digitalisierung
   exclude:
     - sales
     - account executive

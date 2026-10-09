@@ -517,3 +517,48 @@ def fetch_wwr():
                 "published_at": e.get("published", ""),
             })
     return out
+
+
+# ---------------------------------------------------------------------------
+# Jobicy - free public remote-jobs API, no key: https://jobicy.com/api/v2/remote-jobs
+# Documented job fields: id, url, jobTitle, companyName, jobIndustry, jobType, jobGeo,
+# jobLevel, jobExcerpt, jobDescription (HTML), pubDate, salaryMin, salaryMax,
+# salaryCurrency, salaryPeriod. Jobs cover the last 7 days. Terms: credit Jobicy and
+# keep the canonical Jobicy URL (we do: source "Jobicy", url = Jobicy job page);
+# poll at most about once per hour (the app caches results for 30 minutes and only
+# calls it once per refresh).
+# Only roles open to Italy / Switzerland / Europe / EMEA / anywhere are kept.
+# ---------------------------------------------------------------------------
+JOBICY_OK_GEO = ("italy", "switzerland", "europe", "emea", "anywhere", "worldwide", "global")
+
+
+def fetch_jobicy(tag="product", count=100):
+    r = requests.get("https://jobicy.com/api/v2/remote-jobs", params={"count": count, "tag": tag},
+                     headers=UA, timeout=TIMEOUT)
+    r.raise_for_status()
+    out = []
+    for j in r.json().get("jobs", []) or []:
+        geo = to_text(j.get("jobGeo"))
+        if geo and not any(g in geo.lower() for g in JOBICY_OK_GEO):
+            continue
+        description = clean_html(j.get("jobDescription") or j.get("jobExcerpt") or "")
+        salary = ""
+        if j.get("salaryMin") or j.get("salaryMax"):
+            salary = " ".join(str(x) for x in (j.get("salaryCurrency"), j.get("salaryMin"), "-",
+                                               j.get("salaryMax"), j.get("salaryPeriod")) if x)
+        location = geo or "Remote"
+        out.append({
+            "source": "Jobicy",
+            "source_id": str(j.get("id", "")),
+            "title": j.get("jobTitle", ""),
+            "company": j.get("companyName", ""),
+            "location": location,
+            "worldwide": guess_worldwide(location, description),
+            "description": description,
+            "employment_type": to_text(j.get("jobType")),
+            "seniority": to_text(j.get("jobLevel")),
+            "salary": salary or extract_salary(description),
+            "url": j.get("url", ""),
+            "published_at": j.get("pubDate", ""),
+        })
+    return out

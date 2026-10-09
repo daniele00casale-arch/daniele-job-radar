@@ -9,6 +9,7 @@ import streamlit as st
 import yaml
 
 import ats_connectors
+import ats_extra
 import connectors
 import cv_parser
 import db
@@ -209,7 +210,7 @@ RESTRICTION_PATTERNS = [
 ]
 RESTRICTION_RX = [re.compile(p) for p in RESTRICTION_PATTERNS]
 
-REMOTE_SOURCES = ("himalayas", "remotive", "we work remotely", "remote ok", "remoteok")
+REMOTE_SOURCES = ("himalayas", "remotive", "we work remotely", "remote ok", "remoteok", "jobicy")
 
 
 def places_in(text, allow_codes=False):
@@ -333,7 +334,7 @@ ROLE_OPTIONS = ["junior product manager", "associate product manager", "product 
 DEFAULT_ROLES = ["junior product manager", "associate product manager", "product owner", "product operations",
                  "junior business analyst", "pricing analyst", "digital transformation"]
 
-base_sources = ["Himalayas", "Arbeitnow", "Remotive", "We Work Remotely", "The Muse", "Remote OK"]
+base_sources = ["Himalayas", "Arbeitnow", "Remotive", "We Work Remotely", "The Muse", "Remote OK", "Jobicy"]
 optional_sources = []
 if connectors.adzuna_configured():
     optional_sources.append("Adzuna")
@@ -365,7 +366,8 @@ with st.expander("🔎 Ruoli e fonti"):
 
 with st.expander("⚙️ Filtri"):
     include_potential = st.toggle("Includi i 'Potential'", value=True)
-    only_today = st.toggle("Solo nuovi di oggi", value=False)
+    only_today = st.toggle("Solo nuovi (pubblicati nelle ultime 24 ore)", value=False,
+                           help="Usa la data di pubblicazione dell'annuncio. Gli annunci senza data non sono inclusi.")
     threshold = st.slider("Compatibilità minima", 0, 100, 45, step=5, format="%d%%")
 
 with st.expander("📧 Gmail" + (" · connesso" if gmail_ok else " · non connesso"), expanded=not gmail_ok):
@@ -534,9 +536,14 @@ def load(qs, sources, include_ats_flag, ats_directory_json):
             errors.append(f"Gmail: {e}")
             statuses.append({"fonte": "Gmail", "stato": "errore", "annunci": 0, "errore": str(e)})
 
+    if "Jobicy" in sources:
+        run("Jobicy", lambda: connectors.fetch_jobicy("product"))
+
     if include_ats_flag:
         for company, entry in json.loads(ats_directory_json).items():
-            ats_jobs, status = ats_connectors.fetch_for_directory_entry(company, entry)
+            # ats_extra adds Workable + Teamtailor and falls back to ats_connectors for the rest
+            ats_jobs, status = ats_extra.fetch_for_directory_entry(company, entry,
+                                                                   ats_connectors.fetch_for_directory_entry)
             jobs.extend(ats_jobs)
             statuses.append({"fonte": f"{company} ({status['ats']})", "stato": status["status"],
                              "annunci": status["jobs_retrieved"], "errore": status["error"]})
@@ -626,6 +633,59 @@ for r in assessed:
     r["date_first_seen"] = row.get("date_first_seen", today)
 
 
+# "Solo nuovi" uses the PUBLICATION date of each ad (published_at), not date_first_seen.
+# On Streamlit Cloud the SQLite file is wiped at every reboot/redeploy (each GitHub push, or
+# when the app sleeps): after a wipe every job - and every old Gmail alert, re-imported because
+# the "already processed" list is wiped too - looked "first seen today". Ads without a usable
+# date are not counted as new.
+try:
+    from zoneinfo import ZoneInfo
+    LOCAL_TZ = ZoneInfo("Europe/Rome")
+except Exception:
+    LOCAL_TZ = timezone.utc
+
+
+def parse_published(value):
+    """published_at comes as 'YYYY-MM-DD', full ISO, RFC 822 (email Date header) or unix time.
+    Returns (datetime_utc, date_only) or (None, False)."""
+    from email.utils import parsedate_to_datetime
+    if value in (None, ""):
+        return None, False
+    s = str(value).strip()
+    try:
+        if s.replace(".", "", 1).isdigit():
+            x = float(s)
+            if x > 1e12:  # milliseconds
+                x /= 1000
+            return datetime.fromtimestamp(x, timezone.utc), False
+        if len(s) == 10 and s[4] == "-" and s[7] == "-":
+            return datetime.fromisoformat(s).replace(tzinfo=LOCAL_TZ), True
+        try:
+            d = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        except ValueError:
+            d = parsedate_to_datetime(s)
+        return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)), False
+    except Exception:
+        return None, False
+
+
+NOW_UTC = datetime.now(timezone.utc)
+TODAY_LOCAL = NOW_UTC.astimezone(LOCAL_TZ).date()
+
+
+def is_new(r):
+    d, date_only = parse_published(r.get("published_at"))
+    if d is None:
+        return False
+    if date_only:
+        return d.date() == TODAY_LOCAL
+    return 0 <= (NOW_UTC - d).total_seconds() <= 24 * 3600
+
+
+for r in assessed:
+    r["is_new"] = is_new(r)
+
+
 # ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
@@ -665,8 +725,9 @@ def render_card(r):
         meta = [where_label(r)]
         if useful(r.get("compensation")):
             meta.append(r["compensation"])
-        if r.get("published_at"):
-            meta.append(str(r["published_at"])[:10])
+        pub, _ = parse_published(r.get("published_at"))
+        if pub:
+            meta.append(("🆕 " if r.get("is_new") else "") + pub.astimezone(LOCAL_TZ).strftime("%d/%m/%Y"))
         st.caption(" · ".join(m for m in meta if m))
         if r.get("geo", {}).get("unverified"):
             st.markdown('<span class="flag">📍 Paesi ammessi non indicati: verifica nell\'annuncio</span>',
@@ -722,7 +783,7 @@ def visible(r):
         return False
     if not include_potential and r["priority"].startswith("POTENTIAL_"):
         return False
-    if only_today and r.get("date_first_seen") != today:
+    if only_today and not r.get("is_new"):
         return False
     k = WHERE_KEY.get(where_choice)
     return not k or k in r["geo"]["where"]

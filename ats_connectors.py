@@ -67,8 +67,19 @@ def fetch_unsupported_ats(company, ats):
 # Confirmed live shape: {jobs:[{id, title, absolute_url, location:{name},
 # departments:[{name}], updated_at, content(HTML), company_name}]}.
 # --------------------------------------------------------------------------
-def fetch_greenhouse(board_token, company_label=None):
-    r = requests.get(f"https://api.greenhouse.io/v1/boards/{board_token}/jobs", params={"content": "true"}, headers=UA, timeout=TIMEOUT)
+GREENHOUSE_HOSTS = {"global": "https://api.greenhouse.io", "eu": "https://boards-api.eu.greenhouse.io"}
+
+
+def fetch_greenhouse(board_token, company_label=None, eu=False):
+    # Boards hosted on job-boards.eu.greenhouse.io live on the EU API host. Try the expected
+    # host first and fall back to the other one on 404, so a wrong `eu` flag doesn't break it.
+    order = ["eu", "global"] if eu else ["global", "eu"]
+    r = None
+    for region in order:
+        r = requests.get(f"{GREENHOUSE_HOSTS[region]}/v1/boards/{board_token}/jobs", params={"content": "true"},
+                         headers=UA, timeout=TIMEOUT)
+        if r.status_code != 404:
+            break
     r.raise_for_status()
     out = []
     for j in r.json().get("jobs", []):
@@ -87,7 +98,7 @@ def fetch_greenhouse(board_token, company_label=None):
             "seniority": "",
             "salary": extract_salary(description),
             "url": j.get("absolute_url", ""),
-            "published_at": to_iso_date(j.get("updated_at", "")),
+            "published_at": j.get("first_published") or to_iso_date(j.get("updated_at", "")),
         })
     return out
 
@@ -168,7 +179,7 @@ def fetch_for_directory_entry(company, entry):
     ats = (entry or {}).get("ats", "").lower()
     try:
         if ats == "greenhouse":
-            jobs = fetch_greenhouse(entry["board_token"], company_label=company)
+            jobs = fetch_greenhouse(entry["board_token"], company_label=company, eu=entry.get("eu", False))
         elif ats == "lever":
             jobs = fetch_lever(entry["site_id"], company_label=company, eu=entry.get("eu", False))
         elif ats == "ashby":
