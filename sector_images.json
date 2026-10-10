@@ -1,0 +1,555 @@
+{
+  "_note": "Photos from Unsplash (unsplash.com), hotlinked per Unsplash API guidelines with photographer credit.",
+  "fintech": [
+    {
+      "url": "https://images.unsplash.com/photo-1509017174183-0b7e0278f1ec?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8bW9iaWxlJTIwcGF5bWVudHxlbnwwfDB8fHwxNzkxNjE0NDkyfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Jonas Leupe",
+      "profile": "https://unsplash.com/@jonasleupe?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/woman-holding-android-smartphone-0IVop5v4MMU?utm_source=job_radar&utm_medium=referral",
+      "alt": "Smartphone mobile payment at terminal"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1423784346385-c1d4dac9893a?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8bW9iaWxlJTIwcGF5bWVudHxlbnwwfDB8fHwxNzkxNjE0NDkyfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Gilles Lambert",
+      "profile": "https://unsplash.com/@gilleslambert?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/silhouette-photo-of-person-holding-smartphone-pb_lF8VWaPU?utm_source=job_radar&utm_medium=referral",
+      "alt": "Person holding a smartphone"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1556740714-a8395b3bf30f?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8bW9iaWxlJTIwcGF5bWVudHxlbnwwfDB8fHwxNzkxNjE0NDkyfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Blake Wisz",
+      "profile": "https://unsplash.com/@blakewisz?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/person-holding-smartphone-beside-tablet-computer-Xn5FbEM9564?utm_source=job_radar&utm_medium=referral",
+      "alt": "Smartphone payment beside a tablet"
+    }
+  ],
+  "insurance": [
+    {
+      "url": "https://images.unsplash.com/photo-1637763723578-79a4ca9225f7?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8aW5zdXJhbmNlJTIwZG9jdW1lbnRzfGVufDB8MHx8fDE3OTE2MTQ0OTd8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Vlad Deep",
+      "profile": "https://unsplash.com/@vladdeep?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-magnifying-glass-sitting-on-top-of-a-piece-of-paper-mCqi3MljC4E?utm_source=job_radar&utm_medium=referral",
+      "alt": "Magnifying glass on an insurance policy"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1635859890085-ec8cb5466806?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8aW5zdXJhbmNlJTIwZG9jdW1lbnRzfGVufDB8MHx8fDE3OTE2MTQ0OTd8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Dimitri Karastelev",
+      "profile": "https://unsplash.com/@dkfra19?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-woman-sitting-at-a-table-with-lots-of-papers-ZH4FUYiaczY?utm_source=job_radar&utm_medium=referral",
+      "alt": "Signing a contract"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1631651693480-97f1132e333d?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8aW5zdXJhbmNlJTIwZG9jdW1lbnRzfGVufDB8MHx8fDE3OTE2MTQ0OTd8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "2H Media",
+      "profile": "https://unsplash.com/@2hmedia?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-wooden-table-topped-with-papers-and-a-pen-spScdgWY-_c?utm_source=job_radar&utm_medium=referral",
+      "alt": "Papers and a pen on a wooden table"
+    }
+  ],
+  "automotive": [
+    {
+      "url": "https://images.unsplash.com/photo-1658285226355-7490109e090f?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8Y2FyJTIwaW50ZXJpb3IlMjBkYXNoYm9hcmR8ZW58MHwwfHx8MTc5MTYxNDQ5N3wy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Mark Chan",
+      "profile": "https://unsplash.com/@markcjn?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-close-up-of-a-car-dashboard-QQAh2qS_i3Q?utm_source=job_radar&utm_medium=referral",
+      "alt": "Close-up of a car dashboard"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1611099711902-1228419f7113?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8Y2FyJTIwaW50ZXJpb3IlMjBkYXNoYm9hcmR8ZW58MHwwfHx8MTc5MTYxNDQ5N3wy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Danny Sleeuwenhoek",
+      "profile": "https://unsplash.com/@sl33vo?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/black-car-instrument-panel-cluster-mJPheg3MyOk?utm_source=job_radar&utm_medium=referral",
+      "alt": "Car instrument panel cluster"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1710083521061-c1b1701c5d95?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8Y2FyJTIwaW50ZXJpb3IlMjBkYXNoYm9hcmR8ZW58MHwwfHx8MTc5MTYxNDQ5N3wy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Sebastian Rurarz",
+      "profile": "https://unsplash.com/@sebastian_rurarz?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-close-up-of-a-steering-wheel-and-dashboard-of-a-car-iqio6ubrMFo?utm_source=job_radar&utm_medium=referral",
+      "alt": "Steering wheel and car dashboard"
+    }
+  ],
+  "mobility": [
+    {
+      "url": "https://images.unsplash.com/photo-1657870334580-28d7b4b5bc7d?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8cHVibGljJTIwdHJhbnNwb3J0JTIwY2l0eXxlbnwwfDB8fHwxNzkxNjE0NDk4fDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Ruben Valenzuela",
+      "profile": "https://unsplash.com/@rubenev520?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-bus-travels-down-the-street-5lXhwPqBcJU?utm_source=job_radar&utm_medium=referral",
+      "alt": "Bus moving down a city street"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1780198234488-de598b7a3d34?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8cHVibGljJTIwdHJhbnNwb3J0JTIwY2l0eXxlbnwwfDB8fHwxNzkxNjE0NDk4fDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Hooman Being",
+      "profile": "https://unsplash.com/@hoomanbeings?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/red-and-white-tram-traveling-on-cobblestone-city-street-sZy6e0L43v4?utm_source=job_radar&utm_medium=referral",
+      "alt": "Tram on a cobblestone city street"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1761227917113-632c3e3abc12?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8cHVibGljJTIwdHJhbnNwb3J0JTIwY2l0eXxlbnwwfDB8fHwxNzkxNjE0NDk4fDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "kai muro",
+      "profile": "https://unsplash.com/@turuturu?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-blue-tram-moves-down-a-city-street-at-dusk-BI51dfHFnJw?utm_source=job_radar&utm_medium=referral",
+      "alt": "Blue tram on a city street at dusk"
+    }
+  ],
+  "healthcare": [
+    {
+      "url": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8bWVkaWNhbCUyMGxhYm9yYXRvcnl8ZW58MHwwfHx8MTc5MTYxNDQ5OXwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Louis Reed",
+      "profile": "https://unsplash.com/@_louisreed?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/refill-of-liquid-on-tubes-pwcKF7L4-no?utm_source=job_radar&utm_medium=referral",
+      "alt": "Pipette filling laboratory tubes"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1606206591513-adbfbdd7a177?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8bWVkaWNhbCUyMGxhYm9yYXRvcnl8ZW58MHwwfHx8MTc5MTYxNDQ5OXwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Testalize.me",
+      "profile": "https://unsplash.com/@testalizeme?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/blood-collection-tubes-in-laboratory-rack-0jE8ynV4mis?utm_source=job_radar&utm_medium=referral",
+      "alt": "Blood collection tubes in a lab rack"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1518152006812-edab29b069ac?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8bWVkaWNhbCUyMGxhYm9yYXRvcnl8ZW58MHwwfHx8MTc5MTYxNDQ5OXwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Ousa Chea",
+      "profile": "https://unsplash.com/@cheaousa?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/white-microscope-on-top-of-black-table-gKUC4TMhOiY?utm_source=job_radar&utm_medium=referral",
+      "alt": "Microscope on a table"
+    }
+  ],
+  "software": [
+    {
+      "url": "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8Y29kZSUyMG9uJTIwc2NyZWVufGVufDB8MHx8fDE3OTE2MTQ1MzB8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Chris Ried",
+      "profile": "https://unsplash.com/@cdr6934?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-computer-screen-with-a-bunch-of-code-on-it-ieic5Tq8YMk?utm_source=job_radar&utm_medium=referral",
+      "alt": "Code on a computer screen"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1607706189992-eae578626c86?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8Y29kZSUyMG9uJTIwc2NyZWVufGVufDB8MHx8fDE3OTE2MTQ1MzB8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Mohammad Rahmani",
+      "profile": "https://unsplash.com/@afgprogrammer?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/computer-screen-displaying-web-code-oXlXu2qukGE?utm_source=job_radar&utm_medium=referral",
+      "alt": "Screen displaying web code"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1542831371-29b0f74f9713?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8Y29kZSUyMG9uJTIwc2NyZWVufGVufDB8MHx8fDE3OTE2MTQ1MzB8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Florian Olivo",
+      "profile": "https://unsplash.com/@florianolv?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/lines-of-html-codes-4hbJ-eymZ1o?utm_source=job_radar&utm_medium=referral",
+      "alt": "Lines of HTML code"
+    }
+  ],
+  "ai_data": [
+    {
+      "url": "https://images.unsplash.com/photo-1674027444485-cec3da58eef4?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8YXJ0aWZpY2lhbCUyMGludGVsbGlnZW5jZSUyMGFic3RyYWN0fGVufDB8MHx8fDE3OTE2MTQ1MzF8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Growtika",
+      "profile": "https://unsplash.com/@growtika?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/an-abstract-image-of-a-sphere-with-dots-and-lines-nGoCBxiaRO0?utm_source=job_radar&utm_medium=referral",
+      "alt": "Abstract sphere of dots and lines"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1677442135703-1787eea5ce01?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8YXJ0aWZpY2lhbCUyMGludGVsbGlnZW5jZSUyMGFic3RyYWN0fGVufDB8MHx8fDE3OTE2MTQ1MzF8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Steve A Johnson",
+      "profile": "https://unsplash.com/@steve_j?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-computer-circuit-board-with-a-brain-on-it-_0iV9LmPDn0?utm_source=job_radar&utm_medium=referral",
+      "alt": "Circuit board with a brain"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1660165458059-57cfb6cc87e5?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8YXJ0aWZpY2lhbCUyMGludGVsbGlnZW5jZSUyMGFic3RyYWN0fGVufDB8MHx8fDE3OTE2MTQ1MzF8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "and machines",
+      "profile": "https://unsplash.com/@and_machines?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/iridescent-rectangular-prisms-in-grid-2yClsTFXIcE?utm_source=job_radar&utm_medium=referral",
+      "alt": "Iridescent prisms in a grid"
+    }
+  ],
+  "ecommerce": [
+    {
+      "url": "https://images.unsplash.com/photo-1770013413878-2530e2c3d82b?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8b25saW5lJTIwc2hvcHBpbmclMjBwYXJjZWx8ZW58MHwwfHx8MTc5MTYxNDUzMnwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Rifki Kurniawan",
+      "profile": "https://unsplash.com/@kurniawann?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/woman-checking-package-with-phone-near-laptop-and-boxes-k63Or81F8-M?utm_source=job_radar&utm_medium=referral",
+      "alt": "Checking a package near laptop and boxes"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1772546553887-acf215214154?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8b25saW5lJTIwc2hvcHBpbmclMjBwYXJjZWx8ZW58MHwwfHx8MTc5MTYxNDUzMnwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Jernej Breznik",
+      "profile": "https://unsplash.com/@gerrno?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-closed-cardboard-box-sits-on-a-striped-rug-t_dy7izleIQ?utm_source=job_radar&utm_medium=referral",
+      "alt": "Closed cardboard parcel"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1758523670564-d1d6a734dc0b?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8b25saW5lJTIwc2hvcHBpbmclMjBwYXJjZWx8ZW58MHwwfHx8MTc5MTYxNDUzMnwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Vitaly Gariev",
+      "profile": "https://unsplash.com/@silverkblack?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/couple-signing-for-a-package-delivery-at-the-door-Kd27X69pYyo?utm_source=job_radar&utm_medium=referral",
+      "alt": "Signing for a package delivery"
+    }
+  ],
+  "retail": [
+    {
+      "url": "https://images.unsplash.com/photo-1784790435603-58b273bd7803?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8cmV0YWlsJTIwc3RvcmUlMjBpbnRlcmlvcnxlbnwwfDB8fHwxNzkxNjE0NTMzfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Jason Zeis",
+      "profile": "https://unsplash.com/@zeis?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/fluorescent-lights-illuminate-a-retail-store-ceiling-with-signs-DcX2qokitZA?utm_source=job_radar&utm_medium=referral",
+      "alt": "Retail store with fluorescent lights"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1764795850238-7a024db5e3ee?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8cmV0YWlsJTIwc3RvcmUlMjBpbnRlcmlvcnxlbnwwfDB8fHwxNzkxNjE0NTMzfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Cova Software",
+      "profile": "https://unsplash.com/@covasoftware?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/modern-retail-store-interior-with-display-cases-and-lighting-CUxuy9UmFIo?utm_source=job_radar&utm_medium=referral",
+      "alt": "Modern retail store interior"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1481437156560-3205f6a55735?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8c2hvcHBpbmclMjBtYWxsfGVufDB8MHx8fDE3OTE2MTQ1NjB8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Heidi Fin",
+      "profile": "https://unsplash.com/@framesbyfin?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/person-walking-inside-building-near-glass-2TLREZi7BUg?utm_source=job_radar&utm_medium=referral",
+      "alt": "Bright shopping mall interior"
+    }
+  ],
+  "fashion": [
+    {
+      "url": "https://images.unsplash.com/photo-1770226415002-dbbd40327ec7?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8cmV0YWlsJTIwc3RvcmUlMjBpbnRlcmlvcnxlbnwwfDB8fHwxNzkxNjE0NTMzfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "atelierbyvineeth ...",
+      "profile": "https://unsplash.com/@atelierbyvineeth?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/mannequins-in-a-clothing-store-window-display-rYFZ8U0xJuM?utm_source=job_radar&utm_medium=referral",
+      "alt": "Mannequins in a clothing store window"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8ZmFzaGlvbiUyMGJvdXRpcXVlfGVufDB8MHx8fDE3OTE2MTQ1NjF8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Clark Street Mercantile",
+      "profile": "https://unsplash.com/@mercantile?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/clothes-store-interior-P3pI6xzovu0?utm_source=job_radar&utm_medium=referral",
+      "alt": "Clothes store interior"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8ZmFzaGlvbiUyMGJvdXRpcXVlfGVufDB8MHx8fDE3OTE2MTQ1NjF8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Clark Street Mercantile",
+      "profile": "https://unsplash.com/@mercantile?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/clothing-boutique-interior-with-hanging-racks-qnKhZJPKFD8?utm_source=job_radar&utm_medium=referral",
+      "alt": "Clothing boutique with hanging racks"
+    }
+  ],
+  "travel": [
+    {
+      "url": "https://images.unsplash.com/photo-1621293954908-907159247fc8?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8aG90ZWwlMjBsb2JieXxlbnwwfDB8fHwxNzkxNjE0NTYxfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Frames For Your Heart",
+      "profile": "https://unsplash.com/@framesforyourheart?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/modern-hotel-lobby-with-designer-furniture-and-wood-walls-zSG-kd-L6vw?utm_source=job_radar&utm_medium=referral",
+      "alt": "Modern hotel lobby"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1549897411-b06572cdf806?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8dHJhdmVsJTIwYWlycG9ydHxlbnwwfDB8fHwxNzkxNjE0NTgwfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Dennis Gecaj",
+      "profile": "https://unsplash.com/@dannis?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/empty-gray-airport-seats-during-daytime-jVvtCCycgcQ?utm_source=job_radar&utm_medium=referral",
+      "alt": "Empty airport seats in daylight"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1503365194569-df4e1d04cec1?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8dHJhdmVsJTIwYWlycG9ydHxlbnwwfDB8fHwxNzkxNjE0NTgwfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "CHUTTERSNAP",
+      "profile": "https://unsplash.com/@chuttersnap?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/travelers-with-luggage-in-airport-terminal-qhNutmNU1pE?utm_source=job_radar&utm_medium=referral",
+      "alt": "Travelers with luggage in an airport terminal"
+    }
+  ],
+  "food": [
+    {
+      "url": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8cmVzdGF1cmFudCUyMHRhYmxlfGVufDB8MHx8fDE3OTE2MTQ1NjJ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Jay Wennington",
+      "profile": "https://unsplash.com/@jaywennington?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/dish-on-white-ceramic-plate-N_Y88TWmGwA?utm_source=job_radar&utm_medium=referral",
+      "alt": "Gourmet dish on a white plate"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1574966739987-65e38db0f7ce?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8cmVzdGF1cmFudCUyMHRhYmxlfGVufDB8MHx8fDE3OTE2MTQ1NjJ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Ronan",
+      "profile": "https://unsplash.com/@ronank?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/clear-wine-glasses-on-top-of-dining-table-PCE0T5i4pDI?utm_source=job_radar&utm_medium=referral",
+      "alt": "Wine glasses on a set dining table"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1599458252573-56ae36120de1?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8cmVzdGF1cmFudCUyMHRhYmxlfGVufDB8MHx8fDE3OTE2MTQ1NjJ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Hitesh Dewasi",
+      "profile": "https://unsplash.com/@iamhiteshdewasi?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/white-ceramic-plate-on-brown-wooden-table-5JwBbnyZzfc?utm_source=job_radar&utm_medium=referral",
+      "alt": "Fine dining table setting"
+    }
+  ],
+  "energy": [
+    {
+      "url": "https://images.unsplash.com/photo-1509391366360-2e959784a276?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8c29sYXIlMjBwYW5lbHN8ZW58MHwwfHx8MTc5MTYxNDU4MHwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "American Public Power Association",
+      "profile": "https://unsplash.com/@publicpowerorg?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/solar-panels-on-green-field-513dBrMJ_5w?utm_source=job_radar&utm_medium=referral",
+      "alt": "Solar panels on a green field"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1497435334941-8c899ee9e8e9?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8c29sYXIlMjBwYW5lbHN8ZW58MHwwfHx8MTc5MTYxNDU4MHwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Andreas Gücklhorn",
+      "profile": "https://unsplash.com/@draufsicht?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/aerial-photography-of-grass-field-with-blue-solar-panels-Ilpf2eUPpUE?utm_source=job_radar&utm_medium=referral",
+      "alt": "Aerial view of a solar farm"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1548337138-e87d889cc369?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8d2luZCUyMHR1cmJpbmVzfGVufDB8MHx8fDE3OTE2MTQ2MDV8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Nicholas Doherty",
+      "profile": "https://unsplash.com/@nrdoherty?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/white-electic-windmill-pONBhDyOFoM?utm_source=job_radar&utm_medium=referral",
+      "alt": "Wind turbine against a blue sky"
+    }
+  ],
+  "industrial": [
+    {
+      "url": "https://images.unsplash.com/photo-1647427060118-4911c9821b82?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8ZmFjdG9yeSUyMG1hY2hpbmVyeXxlbnwwfDB8fHwxNzkxNjE0NTgxfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Simon Kadula",
+      "profile": "https://unsplash.com/@simonkadula?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-factory-filled-with-lots-of-orange-machines-8gr6bObQLOI?utm_source=job_radar&utm_medium=referral",
+      "alt": "Industrial robots in a factory"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1610891015188-5369212db097?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8ZmFjdG9yeSUyMG1hY2hpbmVyeXxlbnwwfDB8fHwxNzkxNjE0NTgxfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Lalit Kumar",
+      "profile": "https://unsplash.com/@klalit?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/industrial-textile-factory-with-machinery-and-pipes-HpPmiduLDC0?utm_source=job_radar&utm_medium=referral",
+      "alt": "Factory machinery and pipes"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1496247749665-49cf5b1022e9?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8ZmFjdG9yeSUyMG1hY2hpbmVyeXxlbnwwfDB8fHwxNzkxNjE0NTgxfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Ant Rozetsky",
+      "profile": "https://unsplash.com/@rozetsky?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/interior-of-large-industrial-factory-SLIFI67jv5k?utm_source=job_radar&utm_medium=referral",
+      "alt": "Interior of a large industrial factory"
+    }
+  ],
+  "consulting": [
+    {
+      "url": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8YnVzaW5lc3MlMjBtZWV0aW5nJTIwb2ZmaWNlfGVufDB8MHx8fDE3OTE2MTQ1ODJ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Dylan Gillis",
+      "profile": "https://unsplash.com/@mainermedia?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/people-sitting-on-chair-in-front-of-table-while-holding-pens-during-daytime-KdeqA3aTnBY?utm_source=job_radar&utm_medium=referral",
+      "alt": "Team meeting around a table"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1606836591695-4d58a73eba1e?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8YnVzaW5lc3MlMjBtZWV0aW5nJTIwb2ZmaWNlfGVufDB8MHx8fDE3OTE2MTQ1ODJ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Rodeo Project Management Software",
+      "profile": "https://unsplash.com/@getrodeo?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/people-sitting-on-chair-inside-building-ONe-snuCaqQ?utm_source=job_radar&utm_medium=referral",
+      "alt": "Business meeting in an office"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1568992687947-868a62a9f521?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8YnVzaW5lc3MlMjBtZWV0aW5nJTIwb2ZmaWNlfGVufDB8MHx8fDE3OTE2MTQ1ODJ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Redd Francisco",
+      "profile": "https://unsplash.com/@reddfrancisco?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/people-sitting-on-chair-5U_28ojjgms?utm_source=job_radar&utm_medium=referral",
+      "alt": "Collaborative meeting"
+    }
+  ],
+  "finance": [
+    {
+      "url": "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8c3RvY2slMjBtYXJrZXQlMjBjaGFydHxlbnwwfDB8fHwxNzkxNjE0NjA2fDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Maxim Hopman",
+      "profile": "https://unsplash.com/@nampoh?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/stock-market-candlestick-chart-on-dark-screen-fiXLQXAhCfk?utm_source=job_radar&utm_medium=referral",
+      "alt": "Candlestick chart on a dark screen"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1560221328-12fe60f83ab8?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8c3RvY2slMjBtYXJrZXQlMjBjaGFydHxlbnwwfDB8fHwxNzkxNjE0NjA2fDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Nicholas Cappello",
+      "profile": "https://unsplash.com/@bash__profile?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/close-up-photo-of-monitor-displaying-graph-Wb63zqJ5gnE?utm_source=job_radar&utm_medium=referral",
+      "alt": "Monitor displaying stock charts"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1449157291145-7efd050a4d0e?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8ZmluYW5jaWFsJTIwZGlzdHJpY3R8ZW58MHwwfHx8MTc5MTYxNDYyOXwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Matthew Henry",
+      "profile": "https://unsplash.com/@matthewhenry?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/low-angle-photography-of-building-VviFtDJakYk?utm_source=job_radar&utm_medium=referral",
+      "alt": "Skyscrapers in the fog"
+    }
+  ],
+  "marketing": [
+    {
+      "url": "https://images.unsplash.com/photo-1557804506-669a67965ba0?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8bWFya2V0aW5nJTIwdGVhbSUyMGJyYWluc3Rvcm1pbmd8ZW58MHwwfHx8MTc5MTYxNDYwN3wy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Austin Distel",
+      "profile": "https://unsplash.com/@austindistel?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/three-men-sitting-while-using-laptops-and-watching-man-beside-whiteboard-wD1LRb9OeEo?utm_source=job_radar&utm_medium=referral",
+      "alt": "Team meeting at a whiteboard"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1586936893354-362ad6ae47ba?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8bWFya2V0aW5nJTIwdGVhbSUyMGJyYWluc3Rvcm1pbmd8ZW58MHwwfHx8MTc5MTYxNDYwN3wy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "UX Indonesia",
+      "profile": "https://unsplash.com/@uxindo?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/team-collaborating-with-sticky-notes-w00FkE6e8zE?utm_source=job_radar&utm_medium=referral",
+      "alt": "Team collaborating with sticky notes"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1623652554515-91c833e3080e?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8bWFya2V0aW5nJTIwdGVhbSUyMGJyYWluc3Rvcm1pbmd8ZW58MHwwfHx8MTc5MTYxNDYwN3wy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "FORTYTWO",
+      "profile": "https://unsplash.com/@byfortytwo?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/person-holding-yellow-sticky-notes-MDu-53qRVr4?utm_source=job_radar&utm_medium=referral",
+      "alt": "Brainstorming with yellow sticky notes"
+    }
+  ],
+  "logistics": [
+    {
+      "url": "https://images.unsplash.com/photo-1587293852726-70cdb56c2866?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8d2FyZWhvdXNlJTIwbG9naXN0aWNzfGVufDB8MHx8fDE3OTE2MTQ2MDd8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "CHUTTERSNAP",
+      "profile": "https://unsplash.com/@chuttersnap?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/brown-cardboard-boxes-on-white-metal-rack-BNBA1h-NgdY?utm_source=job_radar&utm_medium=referral",
+      "alt": "Cardboard boxes on warehouse racks"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8d2FyZWhvdXNlJTIwbG9naXN0aWNzfGVufDB8MHx8fDE3OTE2MTQ2MDd8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Adrian Sulyok",
+      "profile": "https://unsplash.com/@sulyok_imaging?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/yellow-and-white-plastic-box-lot-sczNLg6rrhQ?utm_source=job_radar&utm_medium=referral",
+      "alt": "Warehouse with stacked crates"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1684695749267-233af13276d0?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8d2FyZWhvdXNlJTIwbG9naXN0aWNzfGVufDB8MHx8fDE3OTE2MTQ2MDd8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Alberto Rodríguez",
+      "profile": "https://unsplash.com/@albertorodriguez?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-large-warehouse-filled-with-lots-of-boxes--aCrA9FmT8Y?utm_source=job_radar&utm_medium=referral",
+      "alt": "Large warehouse filled with boxes"
+    }
+  ],
+  "telecom": [
+    {
+      "url": "https://images.unsplash.com/photo-1643155193188-38eb08e2b54f?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8dGVsZWNvbW11bmljYXRpb24lMjB0b3dlcnxlbnwwfDB8fHwxNzkxNjE0NjMwfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "David Arrowsmith",
+      "profile": "https://unsplash.com/@devarrowsmith?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/a-tower-with-several-cell-phones-on-top-of-it-SsAFdirwkXc?utm_source=job_radar&utm_medium=referral",
+      "alt": "Telecom tower with antennas"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1602823284936-463177448097?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8dGVsZWNvbW11bmljYXRpb24lMjB0b3dlcnxlbnwwfDB8fHwxNzkxNjE0NjMwfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Kabiur Rahman Riyad",
+      "profile": "https://unsplash.com/@riiyad?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/black-metal-tower-under-blue-sky-YzZJUXjb9aw?utm_source=job_radar&utm_medium=referral",
+      "alt": "Metal transmission tower under blue sky"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1511233744044-194342066754?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8dGVsZWNvbW11bmljYXRpb24lMjB0b3dlcnxlbnwwfDB8fHwxNzkxNjE0NjMwfDI&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Tony Stoddard",
+      "profile": "https://unsplash.com/@tonystoddard?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/gray-metal-tower-with-accessories-DgZxBnZeQo8?utm_source=job_radar&utm_medium=referral",
+      "alt": "Communication tower with equipment"
+    }
+  ],
+  "real_estate": [
+    {
+      "url": "https://images.unsplash.com/photo-1488972685288-c3fd157d7c7a?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8bW9kZXJuJTIwYXJjaGl0ZWN0dXJlJTIwYnVpbGRpbmd8ZW58MHwwfHx8MTc5MTYxNDYzMHwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Anders Jildén",
+      "profile": "https://unsplash.com/@andersjilden?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/low-angle-photography-of-gray-building-at-daytime-Sc5RKXLBjGg?utm_source=job_radar&utm_medium=referral",
+      "alt": "Modern building facade"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1460574283810-2aab119d8511?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8bW9kZXJuJTIwYXJjaGl0ZWN0dXJlJTIwYnVpbGRpbmd8ZW58MHwwfHx8MTc5MTYxNDYzMHwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Julien Moreau",
+      "profile": "https://unsplash.com/@junoless?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/low-angle-photography-of-building-688Fna1pwOQ?utm_source=job_radar&utm_medium=referral",
+      "alt": "Abstract white facade edge"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1615406020658-6c4b805f1f30?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NHx8bW9kZXJuJTIwYXJjaGl0ZWN0dXJlJTIwYnVpbGRpbmd8ZW58MHwwfHx8MTc5MTYxNDYzMHwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Amir Hosseini",
+      "profile": "https://unsplash.com/@mmpixz?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/brown-concrete-building-during-daytime-3cl6impBd_8?utm_source=job_radar&utm_medium=referral",
+      "alt": "Modern concrete building"
+    }
+  ],
+  "education": [
+    {
+      "url": "https://images.unsplash.com/photo-1564981797816-1043664bf78d?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8dW5pdmVyc2l0eSUyMGxpYnJhcnl8ZW58MHwwfHx8MTc5MTYxNDYzMXwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Drahomír Hugo Posteby-Mach",
+      "profile": "https://unsplash.com/@postebymach?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/library-interior-with-bookshelves-and-tables-n4y3eiQSIoc?utm_source=job_radar&utm_medium=referral",
+      "alt": "Library interior with bookshelves"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1498243691581-b145c3f54a5a?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8dW5pdmVyc2l0eSUyMGxpYnJhcnl8ZW58MHwwfHx8MTc5MTYxNDYzMXwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Priscilla Du Preez 🇨🇦",
+      "profile": "https://unsplash.com/@priscilladupreez?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/shallow-focus-photography-of-bookshelfs-ggeZ9oyI-PE?utm_source=job_radar&utm_medium=referral",
+      "alt": "Library bookshelves"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1531259736756-6caccf485f81?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8dW5pdmVyc2l0eSUyMGxpYnJhcnl8ZW58MHwwfHx8MTc5MTYxNDYzMXwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Ken Theimer",
+      "profile": "https://unsplash.com/@rubik3x?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/person-inside-cathedral-PoE6Q48B-5k?utm_source=job_radar&utm_medium=referral",
+      "alt": "Grand university reading room"
+    }
+  ],
+  "media_entertainment": [
+    {
+      "url": "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8bXVzaWMlMjBzdHVkaW98ZW58MHwwfHx8MTc5MTYxNDY1NHwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Caught In Joy",
+      "profile": "https://unsplash.com/@caught_in_joy?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/recording-studio-with-guitars-and-console-ptVBlniJi50?utm_source=job_radar&utm_medium=referral",
+      "alt": "Recording studio with mixing console"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8bXVzaWMlMjBzdHVkaW98ZW58MHwwfHx8MTc5MTYxNDY1NHwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "John Matychuk",
+      "profile": "https://unsplash.com/@john_matychuk?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/music-room-with-lights-turned-on-gUK3lA3K7Yo?utm_source=job_radar&utm_medium=referral",
+      "alt": "Concert stage with lights"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1518972559570-7cc1309f3229?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8bXVzaWMlMjBzdHVkaW98ZW58MHwwfHx8MTc5MTYxNDY1NHwy&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Dylan McLeod",
+      "profile": "https://unsplash.com/@son_of_media?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/close-up-photography-of-turned-on-audio-mixer-VRdZBLqnoMU?utm_source=job_radar&utm_medium=referral",
+      "alt": "Close-up of an audio mixer"
+    }
+  ],
+  "public_sector": [
+    {
+      "url": "https://images.unsplash.com/photo-1523292562811-8fa7962a78c8?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8MXx8Z292ZXJubWVudCUyMGJ1aWxkaW5nfGVufDB8MHx8fDE3OTE2MTQ2NTV8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Katie Moum",
+      "profile": "https://unsplash.com/@katiemoum?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/white-concrete-building-under-sky-o0kbc907i20?utm_source=job_radar&utm_medium=referral",
+      "alt": "Neoclassical government building"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1618656172765-26774a4a38d2?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8Z292ZXJubWVudCUyMGJ1aWxkaW5nfGVufDB8MHx8fDE3OTE2MTQ2NTV8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Samuel Schroth",
+      "profile": "https://unsplash.com/@sammy?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/white-concrete-building-under-blue-sky-during-daytime-hyPt63Df3Dw?utm_source=job_radar&utm_medium=referral",
+      "alt": "Public building under blue sky"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1573181759662-1c146525b21f?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8Z292ZXJubWVudCUyMGJ1aWxkaW5nfGVufDB8MHx8fDE3OTE2MTQ2NTV8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Karson",
+      "profile": "https://unsplash.com/@karson_?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/beige-concrete-building-3U-0SEoE0v0?utm_source=job_radar&utm_medium=referral",
+      "alt": "State capitol building"
+    }
+  ],
+  "generic": [
+    {
+      "url": "https://images.unsplash.com/photo-1631193816258-28b44b21e78b?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8Mnx8bW9kZXJuJTIwb2ZmaWNlJTIwd29ya3NwYWNlfGVufDB8MHx8fDE3OTE2MTQ2NTZ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Petr",
+      "profile": "https://unsplash.com/@mpetrucho?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/office-workspace-with-rows-of-desks-Ugnm0F4e00U?utm_source=job_radar&utm_medium=referral",
+      "alt": "Open-plan office with rows of desks"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1718220216044-006f43e3a9b1?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8NXx8bW9kZXJuJTIwb2ZmaWNlJTIwd29ya3NwYWNlfGVufDB8MHx8fDE3OTE2MTQ2NTZ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Bernd 📷 Dittrich",
+      "profile": "https://unsplash.com/@hdbernd?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/an-office-with-a-lot-of-desks-and-chairs-pYlBAu3de0w?utm_source=job_radar&utm_medium=referral",
+      "alt": "Bright modern office with desks"
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1559136555-9303baea8ebd?ixid=M3wxMDE3MjIwfDB8MXxzZWFyY2h8M3x8bW9kZXJuJTIwb2ZmaWNlJTIwd29ya3NwYWNlfGVufDB8MHx8fDE3OTE2MTQ2NTZ8Mg&ixlib=rb-4.1.0&w=640&h=360&fit=crop&crop=entropy&q=70&auto=format",
+      "photographer": "Proxyclick Visitor Management System",
+      "profile": "https://unsplash.com/@proxyclick?utm_source=job_radar&utm_medium=referral",
+      "page": "https://unsplash.com/photos/man-standing-beside-another-sitting-man-using-computer-l90zRbWvCoE?utm_source=job_radar&utm_medium=referral",
+      "alt": "Colleagues working at a computer"
+    }
+  ]
+}

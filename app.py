@@ -1,3 +1,4 @@
+import html
 import json
 import os
 import re
@@ -14,6 +15,7 @@ import connectors
 import cv_parser
 import db
 import scoring
+import tiers
 from email_parser import parse_eml_bytes
 
 try:
@@ -47,6 +49,35 @@ st.markdown("""
   .score {font-weight:700; font-size:0.85rem; color:#0f172a;}
   .flag {font-size:0.8rem; color:#b45309;}
   div[data-testid="stPills"] button {border-radius: 999px;}
+  .t-pill {display:inline-block; padding:3px 10px; border-radius:999px; font-size:0.72rem; font-weight:700;}
+  .t-diamond {background:#c7d2fe; color:#1e1b4b;}
+  .t-gold {background:#fde68a; color:#78350f;}
+  .t-silver {background:#e2e8f0; color:#334155;}
+  .t-other {background:#ffffff; color:#334155;}
+  .jr-row {display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; padding:4px 2px 14px;
+           -webkit-overflow-scrolling:touch; scrollbar-width:thin;}
+  .jr-card {flex:0 0 80%; max-width:280px; scroll-snap-align:start; background:#ffffff; color:#0f172a;
+            border:1px solid #e2e8f0; border-radius:14px; overflow:hidden; display:flex; flex-direction:column;
+            box-shadow:0 1px 3px rgba(15,23,42,.08);}
+  @media (min-width: 640px) {.jr-card {flex-basis:262px;}}
+  .jr-img {position:relative; height:118px; background:#e2e8f0;}
+  .jr-img img {width:100%; height:100%; object-fit:cover; display:block;}
+  .jr-img .t-pill {position:absolute; top:8px; left:8px; box-shadow:0 1px 2px rgba(0,0,0,.25);}
+  .jr-flag {position:absolute; top:4px; right:8px; font-size:1.45rem; line-height:1.4;
+            filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));}
+  .jr-body {padding:10px 12px 10px; display:flex; flex-direction:column; gap:6px; flex:1;}
+  .jr-title {font-weight:700; font-size:0.95rem; line-height:1.25; display:-webkit-box; -webkit-line-clamp:2;
+             -webkit-box-orient:vertical; overflow:hidden; min-height:2.4em;}
+  .jr-company {font-size:0.8rem; color:#475569; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .jr-chips {display:flex; flex-wrap:wrap; gap:4px;}
+  .jr-chip {font-size:0.7rem; padding:2px 8px; border-radius:999px; background:#f1f5f9; color:#334155;}
+  .jr-chip.pay {background:#dcfce7; color:#14532d; font-weight:700;}
+  .jr-chip.new {background:#fee2e2; color:#7f1d1d;}
+  .jr-foot {margin-top:auto; display:flex; justify-content:space-between; align-items:center; font-size:0.74rem;
+            color:#64748b; padding-top:4px; border-top:1px solid #f1f5f9;}
+  .jr-open {font-weight:700; color:#4338ca !important; text-decoration:none;}
+  .jr-credit {font-size:0.6rem; color:#94a3b8; padding:0 12px 7px;}
+  .jr-credit a {color:#94a3b8 !important;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -224,7 +255,10 @@ def places_in(text, allow_codes=False):
 def location_text(j, r):
     parts = [j.get(k) for k in ("location", "candidate_required_location", "job_location", "locations",
                                 "country", "region", "city")]
-    parts += [r.get("remote_scope"), r.get("country_restrictions")]
+    # scoring.py's remote_scope is a label, not job data: its default "Remote arrangement requires
+    # confirmation" contains the word "remote" and used to make every scored job look remote.
+    if r.get("remote_scope") == "Genuinely worldwide":
+        parts.append("worldwide")
     out = []
     for p in parts:
         if isinstance(p, (list, tuple)):
@@ -365,7 +399,6 @@ with st.expander("🔎 Ruoli e fonti"):
                    "(ADZUNA_APP_ID / ADZUNA_APP_KEY) o Jooble (JOOBLE_API_KEY_CH) nei Secrets di Streamlit.")
 
 with st.expander("⚙️ Filtri"):
-    include_potential = st.toggle("Includi i 'Potential'", value=True)
     only_today = st.toggle("Solo nuovi (pubblicati nelle ultime 24 ore)", value=False,
                            help="Usa la data di pubblicazione dell'annuncio. Gli annunci senza data non sono inclusi.")
     threshold = st.slider("Compatibilità minima", 0, 100, 45, step=5, format="%d%%")
@@ -603,9 +636,14 @@ for j in unique.values():
                             "confidence": "Low", "rejection_tags": []})
         continue
     diagnostics.append(scoring.diagnose(j, result))
-    if result.get("priority") is None:
-        filtered_out.append(result)
+    if result.get("priority") is None and "score" not in result:
+        filtered_out.append(result)  # hard filter: unpaid, senior title, title gate, country restriction
         continue
+    if result.get("priority") is None:
+        # passed every hard filter but none of scoring.py's old tiers: it still competes for the new tiers
+        result.update({"title": j.get("title"), "company": j.get("company"), "source": j.get("source"),
+                       "url": j.get("url"), "published_at": j.get("published_at"), "reasons": [],
+                       "contract_type": j.get("employment_type") or "n/d", "filtered_out_reason": None})
 
     geo = geo_check(j, result)
     result["geo"] = geo
@@ -615,11 +653,14 @@ for j in unique.values():
         result["filtered_out_reason"] = geo["reason"]
         geo_excluded.append(result)
         continue
-    if result["score"] < threshold and result["priority"] not in ("STRATEGIC_INTERNSHIP", "HIGH_VALUE_PART_TIME"):
+    info = tiers.classify(j, geo, watchlist)
+    result["radar"] = info
+    result["tier"] = info["tier"]
+    if result["score"] < threshold and info["tier"] == "OTHER":
         result["filtered_out_reason"] = f"Compatibilità {result['score']}% sotto la soglia del {threshold}%"
         filtered_out.append(result)
         continue
-    result["job_id"] = db.upsert_job(j, result["priority"], result["score"])
+    result["job_id"] = db.upsert_job(j, info["tier"], result["score"])
     assessed.append(result)
 
 db.log_refresh(len(jobs), len(assessed), len(filtered_out) + len(geo_excluded), len(st.session_state.get("errors", [])))
@@ -689,12 +730,6 @@ for r in assessed:
 # ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
-BADGES = {
-    "DIAMOND": ("💎 Diamond", "b-diamond"), "POTENTIAL_DIAMOND": ("💎 Potential", "b-diamond b-pot"),
-    "GOLD": ("🥇 Gold", "b-gold"), "POTENTIAL_GOLD": ("🥇 Potential", "b-gold b-pot"),
-    "SILVER": ("🥈 Silver", "b-silver"), "POTENTIAL_SILVER": ("🥈 Potential", "b-silver b-pot"),
-    "STRATEGIC_INTERNSHIP": ("🎓 Stage", "b-intern"), "HIGH_VALUE_PART_TIME": ("⏱️ Part-time", "b-part"),
-}
 STATUS_LABELS = {"new": "Nuovo", "saved": "Salvato", "applied": "Candidato", "interviewing": "Colloquio",
                  "rejected": "Rifiutato", "archived": "Archiviato"}
 
@@ -716,14 +751,57 @@ def useful(v):
     return v and not any(x in v.lower() for x in ("not disclosed", "not clearly stated", "n/d", "unknown"))
 
 
+def tier_pill(r):
+    label, cls = tiers.TIER_META.get(r.get("tier") or "OTHER", tiers.TIER_META["OTHER"])
+    return f'<span class="t-pill {cls}">{label}</span>'
+
+
+def card_html(r):
+    """Preview card for the carousel (pure HTML: Streamlit widgets can't live inside a scrolling row)."""
+    info = r.get("radar") or {}
+    e = html.escape
+    img = info.get("image") or {}
+    img_tag = f'<img src="{e(img["url"])}" alt="{e(img.get("alt") or "")}" loading="lazy">' if img.get("url") else ""
+    loc = (r.get("location") or "").strip()
+    place = info.get("place") or ""
+    if loc and loc.lower() not in ("remote", "anywhere", "worldwide"):
+        place = loc
+    chips_ = [f'<span class="jr-chip">{e(info.get("employment") or "Contratto n/d")}</span>']
+    if info.get("pay"):
+        chips_.append(f'<span class="jr-chip pay">💰 {e(info["pay"]["display"])}</span>')
+    if r.get("is_new"):
+        chips_.append('<span class="jr-chip new">🆕 Nuovo</span>')
+    if info.get("watchlisted") and r.get("tier") != "SILVER":
+        chips_.append('<span class="jr-chip">⭐ Watchlist</span>')
+    link = r.get("source_url") or r.get("url")
+    open_a = f'<a class="jr-open" href="{e(link)}" target="_blank" rel="noopener">Apri ↗</a>' if link else ""
+    credit = ""
+    if img.get("photographer"):
+        credit = (f'<div class="jr-credit">📷 <a href="{e(img.get("profile") or "#")}" target="_blank" rel="noopener">'
+                  f'{e(img["photographer"])}</a> · <a href="https://unsplash.com/?utm_source=job_radar&utm_medium=referral" '
+                  f'target="_blank" rel="noopener">Unsplash</a></div>')
+    return (f'<div class="jr-card"><div class="jr-img">{img_tag}{tier_pill(r)}'
+            f'<span class="jr-flag">{info.get("flag", "🌏")}</span></div>'
+            f'<div class="jr-body"><div class="jr-title">{e(r.get("title") or "")}</div>'
+            f'<div class="jr-company">{e(r.get("company") or "")}{" · " + e(place) if place else ""}</div>'
+            f'<div class="jr-chips">{"".join(chips_)}</div>'
+            f'<div class="jr-foot"><span>{e(r.get("source") or "")} · {r.get("score", "?")}%</span>{open_a}</div>'
+            f'</div>{credit}</div>')
+
+
+def render_carousel(rows):
+    st.markdown('<div class="jr-row">' + "".join(card_html(r) for r in rows) + "</div>", unsafe_allow_html=True)
+
+
 def render_card(r):
-    label, cls = BADGES.get(r["priority"], (r["priority"] or "", "b-silver"))
     with st.container(border=True):
-        st.markdown(f'<span class="badge {cls}">{label}</span><span class="score">{r.get("score", "?")}%</span>',
-                    unsafe_allow_html=True)
+        st.markdown(f'{tier_pill(r)} <span class="score">{r.get("score", "?")}%</span>', unsafe_allow_html=True)
         st.markdown(f"**{r.get('title', '')}**  \n{r.get('company', '')}")
         meta = [where_label(r)]
-        if useful(r.get("compensation")):
+        pay = (r.get("radar") or {}).get("pay")
+        if pay:
+            meta.append(pay["display"])
+        elif useful(r.get("compensation")):
             meta.append(r["compensation"])
         pub, _ = parse_published(r.get("published_at"))
         if pub:
@@ -746,7 +824,10 @@ def render_card(r):
             st.rerun()
 
         with st.expander("Dettagli"):
-            rows = [("Esperienza", r.get("experience_required")), ("Contratto", r.get("contract_type")),
+            if (r.get("radar") or {}).get("why"):
+                st.markdown(f"**Perché è in questo livello:** {r['radar']['why']}")
+            rows = [("Esperienza", r.get("experience_required")),
+                    ("Contratto", (r.get("radar") or {}).get("employment") or r.get("contract_type")),
                     ("Remoto", r.get("remote_scope")), ("Fonte", r.get("source"))]
             for k, v in rows:
                 if useful(v):
@@ -767,30 +848,23 @@ def render_excluded(r):
 
 
 # --- filtering for the main list ---
-TIER_GROUPS = [
-    ("💎 Diamond", ["DIAMOND", "POTENTIAL_DIAMOND"]),
-    ("🥇 Gold", ["GOLD", "POTENTIAL_GOLD"]),
-    ("🥈 Silver", ["SILVER", "POTENTIAL_SILVER"]),
-    ("🎓 Stage", ["STRATEGIC_INTERNSHIP"]),
-    ("⏱️ Part-time", ["HIGH_VALUE_PART_TIME"]),
-]
-TIER_OF = {p: name for name, ps in TIER_GROUPS for p in ps}
 WHERE_KEY = {"🌍 Remoto": "remote", "🇨🇭 Ticino": "ch", "🇮🇹 Italia": "it"}
+TIER_LABEL = {t: tiers.TIER_META[t][0] for t in tiers.TIER_ORDER}
 
 
 def visible(r):
-    if r["priority"] not in TIER_OF:
-        return False
-    if not include_potential and r["priority"].startswith("POTENTIAL_"):
-        return False
     if only_today and not r.get("is_new"):
         return False
     k = WHERE_KEY.get(where_choice)
     return not k or k in r["geo"]["where"]
 
 
-to_review = sorted([r for r in assessed if r["status"] in ("new", "saved") and visible(r)],
-                   key=lambda r: r.get("score", 0), reverse=True)
+def tier_sort_key(r):
+    pay = (r.get("radar") or {}).get("pay")
+    return (-(r.get("score") or 0), -(pay["mid_eur"] if pay else 0))
+
+
+to_review = sorted([r for r in assessed if r["status"] in ("new", "saved") and visible(r)], key=tier_sort_key)
 pipeline = [r for r in assessed if r["status"] in ("applied", "interviewing", "rejected", "archived")]
 
 summary = f"{len(to_review)} da vedere · {len(pipeline)} candidature"
@@ -812,21 +886,47 @@ if view == VIEWS[0]:
             st.info("Nessuna posizione con questi filtri. Prova ad abbassare la compatibilità minima o ad "
                     "aggiungere ruoli.")
     else:
-        groups = {name: [r for r in to_review if TIER_OF[r["priority"]] == name] for name, _ in TIER_GROUPS}
-        tier_labels = ["Tutti"] + [name for name, _ in TIER_GROUPS if groups[name]]
-        st.caption("  ·  ".join(f"{name} **{len(groups[name])}**" for name, _ in TIER_GROUPS if groups[name]))
-        tier_choice = chips("Livello", tier_labels, "Tutti", key="tier_view", single=True, hide_label=True) or "Tutti"
-        shown = 0
-        for name, _ in TIER_GROUPS:
-            if tier_choice not in ("Tutti", name) or not groups[name]:
+        groups = {t: [r for r in to_review if r.get("tier") == t] for t in tiers.TIER_ORDER}
+        tier_opts = ["Tutti"] + [TIER_LABEL[t] for t in tiers.TIER_ORDER]
+        tier_choice = chips("Livello", tier_opts, "Tutti", key="tier_filter", single=True, hide_label=True) or "Tutti"
+        st.caption("  ·  ".join(f"{TIER_LABEL[t]} **{len(groups[t])}**" for t in tiers.TIER_ORDER))
+        with st.expander("ℹ️ Come sono assegnati i livelli"):
+            st.markdown(
+                "- **💎 Diamond**: full remote (da ovunque, Europa o Italia) con stipendio sopra 30.000/anno, "
+                "oppure Canton Ticino sopra CHF 45.000/anno.\n"
+                "- **🥇 Gold**: part-time pagato sopra 28.000/anno, in Italia, Canton Ticino o full remote.\n"
+                "- **🥈 Silver**: aziende della tua watchlist (PagoPA, Satispay, ...).\n"
+                "- **📋 Altre**: il resto che supera i filtri e la compatibilità minima.\n\n"
+                "Senza stipendio leggibile un annuncio non può essere Diamond o Gold. Per un intervallo conta il "
+                "valore medio; mensile x12; orario solo se sono indicate le ore settimanali. Il cambio "
+                "EUR/CHF/USD è approssimato.")
+        shown_rows = []
+        for t in tiers.TIER_ORDER:
+            if tier_choice not in ("Tutti", TIER_LABEL[t]):
                 continue
-            st.subheader(f"{name} · {len(groups[name])}")
-            for r in groups[name][:max(0, 150 - shown)]:
-                render_card(r)
-            shown += len(groups[name])
+            st.markdown(f"#### {TIER_LABEL[t]} · {len(groups[t])}")
+            if not groups[t]:
+                st.caption("Nessuna posizione per ora.")
+                continue
+            render_carousel(groups[t][:40])
+            if len(groups[t]) > 40:
+                st.caption(f"Mostrate le prime 40 di {len(groups[t])} (le più compatibili).")
+            shown_rows += groups[t]
+
+        if shown_rows:
+            st.markdown("#### ✏️ Gestisci una posizione")
+            by_id = {r["job_id"]: r for r in shown_rows}
+            pick = st.selectbox("Posizione", list(by_id), index=None, key="manage_pick",
+                                placeholder="Scegli per cambiare stato o aggiungere note",
+                                format_func=lambda jid: f"{by_id[jid].get('title')} · {by_id[jid].get('company')}",
+                                label_visibility="collapsed")
+            if pick:
+                render_card(by_id[pick])
         df = pd.DataFrame([{"titolo": r.get("title"), "azienda": r.get("company"), "dove": where_label(r),
-                            "livello": r.get("priority"), "compatibilità": r.get("score"),
-                            "stipendio": r.get("compensation"), "link": r.get("source_url")} for r in to_review])
+                            "livello": TIER_LABEL.get(r.get("tier"), ""), "compatibilità": r.get("score"),
+                            "contratto": (r.get("radar") or {}).get("employment"),
+                            "stipendio": ((r.get("radar") or {}).get("pay") or {}).get("display") or r.get("compensation"),
+                            "fonte": r.get("source"), "link": r.get("source_url")} for r in to_review])
         st.download_button("⬇️ Esporta CSV", df.to_csv(index=False).encode("utf-8"),
                            file_name="job_radar.csv", mime="text/csv")
 
