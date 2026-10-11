@@ -138,14 +138,11 @@ def _list_unprocessed(service, label_id, want_new, max_pages=6):
     return out
 
 
-def fetch_gmail_job_alerts(max_results=40):
+def _fetch_alerts_one(slot, max_results):
     """Fetch up to `max_results` NEW (not yet processed) alert emails per label (LinkedIn / Indeed / Company),
     parse each into individual job records. Raises RuntimeError if not connected OR if none of the configured
     labels exist (with the list of labels found, so a naming mismatch is visible instead of a silent 0)."""
-    if not gmail_connected():
-        raise RuntimeError("Gmail non connesso: completa il wizard di configurazione Gmail (passi 1-5)")
-
-    service = _get_service()
+    service = _get_service(slot)
     jobs, failures, found, missing = [], [], 0, []
     cache = {}
     for provider, label_name in LABELS.items():
@@ -170,4 +167,21 @@ def fetch_gmail_job_alerts(max_results=40):
         present = sorted(n for n in cache.get("names", []) if "job" in n.lower() or "alert" in n.lower())
         present_txt = ", ".join(present) if present else "nessuna con 'job' o 'alert' nel nome"
         raise RuntimeError(f"Nessuna etichetta Gmail trovata. Attese: {', '.join(missing)}. Presenti nel tuo account: {present_txt}")
+    return jobs, failures
+
+
+def fetch_gmail_job_alerts(max_results=40):
+    """Job alerts from the main account and, if connected, the optional second account.
+    The main account keeps the strict behaviour (clear error when its labels are missing);
+    a second account without the labels is simply skipped."""
+    if not gmail_connected():
+        raise RuntimeError("Gmail non connesso: completa il wizard di configurazione Gmail (passi 1-5)")
+    jobs, failures = _fetch_alerts_one("main", max_results)
+    if gmail_oauth.is_connected("second"):
+        try:
+            j2, f2 = _fetch_alerts_one("second", max_results)
+            jobs += j2
+            failures += f2
+        except Exception:
+            pass
     return jobs, failures
