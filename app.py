@@ -10,6 +10,7 @@ import streamlit as st
 import yaml
 
 import ats_connectors
+import application_tracker
 import ats_extra
 import connectors
 import cv_parser
@@ -874,7 +875,7 @@ if st.session_state.get("refreshed_at"):
     summary += f" · aggiornato alle {st.session_state['refreshed_at']}"
 st.caption(summary)
 
-VIEWS = ["Da vedere", "Candidature", "Escluse", "🔌 Connettori"]
+VIEWS = ["Da vedere", "Candidature", "📬 Processi", "Escluse", "🔌 Connettori"]
 view = chips("Vista", VIEWS, VIEWS[0], key="view", single=True, hide_label=True) or VIEWS[0]
 
 if view == VIEWS[0]:
@@ -937,7 +938,60 @@ elif view == VIEWS[1]:
     for r in sorted(pipeline, key=lambda r: order.get(r["status"], 9)):
         render_card(r)
 
-elif view == VIEWS[2]:
+elif view == "📬 Processi":
+    st.markdown("#### 📬 Candidature e processi di selezione")
+    st.caption("Ricostruiti dalle email di conferma, invito e rifiuto nella tua Gmail (sola lettura). "
+               "Il riconoscimento è automatico: apri l'email per i dettagli.")
+    if not gmail_ok:
+        st.info("Collega Gmail dalla sezione 📧 Gmail per vedere qui le candidature inviate.")
+    else:
+        c1, c2 = st.columns([2, 1])
+        days = c1.select_slider("Periodo", options=[7, 14, 21, 30, 60], value=21, format_func=lambda d: f"ultimi {d} giorni")
+        reload_proc = c2.button("🔄 Aggiorna processi")
+        cache_key = f"processes_{days}"
+        if reload_proc or cache_key not in st.session_state:
+            with st.spinner("Leggo le email delle candidature..."):
+                try:
+                    st.session_state[cache_key] = application_tracker.fetch_applications(
+                        gmail_connector._get_service(), days=days)
+                    st.session_state[cache_key + "_err"] = None
+                except Exception as e:
+                    st.session_state[cache_key] = []
+                    st.session_state[cache_key + "_err"] = str(e)
+        if st.session_state.get(cache_key + "_err"):
+            st.error(f"Lettura Gmail non riuscita: {st.session_state[cache_key + '_err']}")
+        procs = st.session_state.get(cache_key, [])
+        counts = {k: sum(1 for p in procs if p["status"] == k) for k in application_tracker.STATUS_LABEL}
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Candidature", len(procs))
+        m2.metric("🚀 Prossimo step", counts["next_step"])
+        m3.metric("⏳ In attesa", counts["received"] + counts["viewed"])
+        m4.metric("❌ Rifiutate", counts["rejected"])
+        labels = ["Tutte"] + [application_tracker.STATUS_LABEL[k] for k in ("next_step", "viewed", "received", "rejected")]
+        pick = chips("Stato", labels, "Tutte", key="proc_filter", single=True, hide_label=True) or "Tutte"
+        shown_p = [p for p in procs if pick == "Tutte" or application_tracker.STATUS_LABEL[p["status"]] == pick]
+        if not procs:
+            st.info("Nessuna email di candidatura trovata nel periodo scelto.")
+        elif shown_p:
+            dfp = pd.DataFrame([{
+                "Stato": application_tracker.STATUS_LABEL[p["status"]],
+                "Azienda": p["company"] if p["company"] != "n/d" else "(non indicata)",
+                "Ruolo": p["role"] or "—",
+                "Ultimo aggiornamento": p["date"].astimezone(LOCAL_TZ).strftime("%d/%m/%Y") if p["date"] else "",
+                "Email": p["emails"],
+                "Apri": p["link"],
+            } for p in shown_p])
+            st.dataframe(dfp, hide_index=True,
+                         column_config={"Apri": st.column_config.LinkColumn("Apri", display_text="Apri email ↗")})
+            with st.expander("Ultima email per ogni candidatura"):
+                for p in shown_p:
+                    st.markdown(f"**{p['company']}** · {p['role'] or ''} — {application_tracker.STATUS_LABEL[p['status']]}  \n"
+                                f"<span style='color:#64748b;font-size:0.85rem'>{html.escape(p['subject'])} — "
+                                f"{html.escape(p['snippet'])}</span>", unsafe_allow_html=True)
+            st.download_button("⬇️ Esporta CSV", dfp.to_csv(index=False).encode("utf-8"),
+                               file_name="processi_selezione.csv", mime="text/csv")
+
+elif view == "Escluse":
     if geo_excluded:
         st.markdown(f"**Limitate ad altri paesi ({len(geo_excluded)})**")
         for r in geo_excluded:
