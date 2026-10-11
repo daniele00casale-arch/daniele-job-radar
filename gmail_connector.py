@@ -114,6 +114,10 @@ def _find_label_id(service, label_name, _cache={}):
     for l in labels:
         if _norm_label(l["name"]) == target:
             return l["id"]
+    # nested duplicates such as 'JOB-ALERTS-LinkedIn/JOB-ALERTS-LinkedIn' (created by the Gmail filter UI)
+    for l in labels:
+        if _norm_label(l["name"]).endswith(target):
+            return l["id"]
     return None
 
 
