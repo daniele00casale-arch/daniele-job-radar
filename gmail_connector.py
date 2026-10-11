@@ -76,7 +76,7 @@ def disconnect_gmail():
     return gmail_oauth.disconnect()
 
 
-def _get_service():
+def _get_service(slot="main"):
     """Build an authenticated Gmail API client, or raise a clear error.
     Imports the Google client libraries lazily so the rest of the app
     works fine even before `pip install -r requirements.txt` picks up
@@ -89,7 +89,7 @@ def _get_service():
             "google-api-python-client, google-auth-oauthlib, google-auth-httplib2"
         ) from e
 
-    creds = gmail_oauth.get_credentials()  # raises RuntimeError if not connected
+    creds = gmail_oauth.get_credentials(slot)  # raises RuntimeError if not connected
     return build("gmail", "v1", credentials=creds)
 
 

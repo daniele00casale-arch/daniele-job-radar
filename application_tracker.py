@@ -160,7 +160,7 @@ def role_from(subject, snippet, company=""):
     return ""
 
 
-def parse_message(msg):
+def parse_message(msg, account=None):
     """msg: Gmail API message resource (format='metadata'). Returns a row dict or None."""
     headers = {h["name"].lower(): h["value"] for h in msg.get("payload", {}).get("headers", [])}
     subject, frm = headers.get("subject", ""), headers.get("from", "")
@@ -178,7 +178,8 @@ def parse_message(msg):
     company = company_from(subject, snippet, frm)
     return {"company": company, "role": role_from(subject, snippet, company), "status": status,
             "date": when, "subject": subject, "snippet": snippet[:220], "thread_id": msg.get("threadId"),
-            "link": f"https://mail.google.com/mail/u/0/#all/{msg.get('threadId')}"}
+            "link": (f"https://mail.google.com/mail/?authuser={account}#all/{msg.get('threadId')}" if account
+                     else f"https://mail.google.com/mail/u/0/#all/{msg.get('threadId')}")}
 
 
 def _key(r):
@@ -213,7 +214,7 @@ def merge(rows):
                                                -(r["date"].timestamp() if r["date"] else 0)))
 
 
-def fetch_applications(service, days=DAYS_DEFAULT, max_messages=200):
+def fetch_rows(service, days=DAYS_DEFAULT, max_messages=200, account=None):
     """Read-only: list matching messages and fetch only their metadata + snippet."""
     ids, token = [], None
     while len(ids) < max_messages:
@@ -229,5 +230,17 @@ def fetch_applications(service, days=DAYS_DEFAULT, max_messages=200):
     for mid in ids[:max_messages]:
         msg = service.users().messages().get(userId="me", id=mid, format="metadata",
                                              metadataHeaders=["Subject", "From", "Date"]).execute()
-        rows.append(parse_message(msg))
+        rows.append(parse_message(msg, account))
+    return rows
+
+
+def fetch_applications(service, days=DAYS_DEFAULT, max_messages=200, account=None):
+    return merge(fetch_rows(service, days, max_messages, account))
+
+
+def fetch_applications_multi(accounts, days=DAYS_DEFAULT, max_messages=200):
+    """accounts: list of (service, email). Merges all accounts into one list (duplicates collapse)."""
+    rows = []
+    for service, email in accounts:
+        rows += fetch_rows(service, days, max_messages, email)
     return merge(rows)

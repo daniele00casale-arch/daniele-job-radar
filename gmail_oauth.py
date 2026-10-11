@@ -45,6 +45,13 @@ DEFAULT_LABELS = {
 _KV_CLIENT_ID = "gmail_oauth_client_id"
 _KV_CLIENT_SECRET = "gmail_oauth_client_secret_enc"
 _KV_TOKEN = "gmail_oauth_token_enc"
+_KV_TOKEN_2 = "gmail_oauth_token2_enc"  # optional second account (same read-only scope)
+_KV_SLOT = "gmail_oauth_slot"  # which account the pending consent flow is for
+SLOTS = ("main", "second")
+
+
+def _tok_key(slot):
+    return _KV_TOKEN_2 if slot == "second" else _KV_TOKEN
 _KV_STATE = "gmail_oauth_state"  # short-lived CSRF token for the redirect round-trip
 _KV_REDIRECT_URI = "gmail_oauth_redirect_uri"  # the exact URI used to build the auth URL, reused at exchange time
 _KV_CODE_VERIFIER = "gmail_oauth_code_verifier_enc"  # PKCE verifier generated alongside the auth URL, needed again at exchange time
@@ -155,7 +162,7 @@ def _client_secrets_dict(client_id, client_secret, redirect_uri):
     }
 
 
-def build_authorization_url(redirect_uri):
+def build_authorization_url(redirect_uri, slot="main"):
     """Step 4: returns (auth_url, state). `state` AND `redirect_uri` are
     stashed server-side (in the local database, tied to nothing
     personal) rather than in Streamlit's session_state, because the
@@ -198,6 +205,7 @@ def build_authorization_url(redirect_uri):
         state=state,
     )
     db.set_kv(_KV_STATE, state)
+    db.set_kv(_KV_SLOT, slot)
     db.set_kv(_KV_REDIRECT_URI, redirect_uri)
     db.set_kv(_KV_CODE_VERIFIER, encryption.encrypt(flow.code_verifier) if flow.code_verifier else None)
     return auth_url, state
@@ -215,6 +223,7 @@ def exchange_code(code, state):
     expected_state = db.get_kv(_KV_STATE)
     redirect_uri = db.get_kv(_KV_REDIRECT_URI)
     enc_verifier = db.get_kv(_KV_CODE_VERIFIER)
+    slot = db.get_kv(_KV_SLOT) or "main"
     if not expected_state or state != expected_state:
         raise RuntimeError(
             "stato OAuth non corrispondente (possibile richiesta scaduta o duplicata) - "
@@ -248,27 +257,28 @@ def exchange_code(code, state):
         raise RuntimeError(
             f"Google ha concesso permessi più ampi del previsto ({sorted(granted)}) - connessione rifiutata per sicurezza"
         )
-    db.set_kv(_KV_TOKEN, encryption.encrypt(creds.to_json()))
+    db.set_kv(_tok_key(slot), encryption.encrypt(creds.to_json()))
+    db.set_kv(_KV_SLOT, None)
     db.set_kv(_KV_REDIRECT_URI, None)
     db.set_kv(_KV_CODE_VERIFIER, None)
     return True
 
 
-def is_connected():
-    return db.get_kv(_KV_TOKEN) is not None
+def is_connected(slot="main"):
+    return db.get_kv(_tok_key(slot)) is not None
 
 
-def disconnect():
+def disconnect(slot="main"):
     """'Disconnect Gmail' button - deletes only this app's locally stored
     token. Never touches the Google account itself; the person can also
     fully revoke this app's access at REVOKE_URL if they want to remove
     it from their Google account's connected-apps list too."""
-    had_token = db.get_kv(_KV_TOKEN) is not None
-    db.set_kv(_KV_TOKEN, None)
+    had_token = db.get_kv(_tok_key(slot)) is not None
+    db.set_kv(_tok_key(slot), None)
     return had_token
 
 
-def get_credentials():
+def get_credentials(slot="main"):
     """Loads stored credentials, refreshing the access token first if it
     has expired (using the stored refresh token - this is the only
     "automatic" step; it never re-prompts the person). Persists the
@@ -278,7 +288,7 @@ def get_credentials():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
 
-    enc_token = db.get_kv(_KV_TOKEN)
+    enc_token = db.get_kv(_tok_key(slot))
     if not enc_token:
         raise RuntimeError("Gmail non connesso: completa il wizard di configurazione Gmail")
     creds = Credentials.from_authorized_user_info(
@@ -287,7 +297,7 @@ def get_credentials():
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            db.set_kv(_KV_TOKEN, encryption.encrypt(creds.to_json()))
+            db.set_kv(_tok_key(slot), encryption.encrypt(creds.to_json()))
         else:
             raise RuntimeError(
                 "il token Gmail salvato non è più valido e non ha un refresh token utilizzabile - "
@@ -296,13 +306,13 @@ def get_credentials():
     return creds
 
 
-def connected_email_address():
+def connected_email_address(slot="main"):
     """Read-only `getProfile` call, used only to show the person WHICH
     Gmail account is connected (a sanity check, e.g. "is this really my
     personal account and not a work one"). Never used for anything else."""
     from googleapiclient.discovery import build
 
-    creds = get_credentials()
+    creds = get_credentials(slot)
     service = build("gmail", "v1", credentials=creds)
     profile = service.users().getProfile(userId="me").execute()
     return profile.get("emailAddress")

@@ -426,6 +426,35 @@ with st.expander("📧 Gmail" + (" · connesso" if gmail_ok else " · non connes
                 st.session_state.pop("gmail_connected_email", None)
                 st.rerun()
             st.link_button("Revoca accesso su Google ↗", gmail_oauth.REVOKE_URL)
+
+            st.markdown("---")
+            st.markdown("**Secondo account (opzionale, solo per 📬 Processi)**")
+            if gmail_oauth.is_connected("second"):
+                email2 = st.session_state.get("gmail_connected_email2")
+                if email2 is None:
+                    try:
+                        email2 = gmail_oauth.connected_email_address("second")
+                    except Exception as e:
+                        email2 = f"(non verificabile: {e})"
+                    st.session_state["gmail_connected_email2"] = email2
+                st.write(f"Secondo account: **{email2}**")
+                if st.button("Disconnetti secondo account"):
+                    gmail_oauth.disconnect("second")
+                    st.session_state.pop("gmail_connected_email2", None)
+                    st.session_state.pop("gmail_second_url", None)
+                    st.rerun()
+            else:
+                st.caption("Collega anche l'altra casella: le candidature di entrambe finiscono nella stessa lista. "
+                           "Nella schermata Google scegli l'altro account.")
+                base2 = gmail_oauth.detect_redirect_base_url() or st.session_state.get("gmail_manual_base_url", "")
+                uri2 = gmail_oauth.redirect_uri_from_base(base2) if base2 else None
+                if uri2 and st.button("➕ Prepara collegamento secondo account"):
+                    try:
+                        st.session_state["gmail_second_url"], _ = gmail_oauth.build_authorization_url(uri2, slot="second")
+                    except Exception as e:
+                        st.error(f"Connessione non preparata: {e}")
+                if st.session_state.get("gmail_second_url"):
+                    st.link_button("🔐 Connetti secondo account", st.session_state["gmail_second_url"], type="primary")
         else:
             st.caption("Accesso di sola lettura, dalla pagina ufficiale di Google.")
             st.markdown("**1. Crea queste etichette in Gmail**")
@@ -948,12 +977,17 @@ elif view == "📬 Processi":
         c1, c2 = st.columns([2, 1])
         days = c1.select_slider("Periodo", options=[7, 14, 21, 30, 60], value=21, format_func=lambda d: f"ultimi {d} giorni")
         reload_proc = c2.button("🔄 Aggiorna processi")
-        cache_key = f"processes_{days}"
+        cache_key = f"processes_{days}_{int(gmail_oauth.is_connected('second'))}"
         if reload_proc or cache_key not in st.session_state:
             with st.spinner("Leggo le email delle candidature..."):
                 try:
-                    st.session_state[cache_key] = application_tracker.fetch_applications(
-                        gmail_connector._get_service(), days=days)
+                    accounts = [(gmail_connector._get_service(),
+                                 st.session_state.get("gmail_connected_email") if gmail_oauth.is_connected("second") else None)]
+                    if gmail_oauth.is_connected("second"):
+                        main_email = accounts[0][1] or gmail_oauth.connected_email_address()
+                        accounts = [(accounts[0][0], main_email),
+                                    (gmail_connector._get_service("second"), gmail_oauth.connected_email_address("second"))]
+                    st.session_state[cache_key] = application_tracker.fetch_applications_multi(accounts, days=days)
                     st.session_state[cache_key + "_err"] = None
                 except Exception as e:
                     st.session_state[cache_key] = []
